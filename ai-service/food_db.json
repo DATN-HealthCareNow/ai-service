@@ -1,0 +1,92 @@
+[
+  {
+    "name": "Sữa chua Hy Lạp trộn hạt và trái cây",
+    "category": "MEAL",
+    "nutrition": { "calories": 200, "protein_g": 15.0, "fat_g": 8.0, "carbs_g": 20.0 }
+  },
+  {
+    "name": "Trứng luộc và khoai lang",
+    "category": "MEAL",
+    "nutrition": { "calories": 220, "protein_g": 13.0, "fat_g": 10.0, "carbs_g": 20.0 }
+  },
+  {
+    "name": "Salad ức gà áp chảo",
+    "category": "MEAL",
+    "nutrition": { "calories": 250, "protein_g": 25.0, "fat_g": 10.0, "carbs_g": 12.0 }
+  },
+  {
+    "name": "Sinh tố bơ chuối",
+    "category": "MEAL",
+    "nutrition": { "calories": 280, "protein_g": 5.0, "fat_g": 15.0, "carbs_g": 35.0 }
+  },
+  {
+    "name": "Bánh yến mạch nướng trứng",
+    "category": "MEAL",
+    "nutrition": { "calories": 310, "protein_g": 12.0, "fat_g": 10.0, "carbs_g": 40.0 }
+  },
+  {
+    "name": "Súp lơ xào thịt bò",
+    "category": "MEAL",
+    "nutrition": { "calories": 320, "protein_g": 22.0, "fat_g": 15.0, "carbs_g": 18.0 }
+  },
+  {
+    "name": "Gỏi cuốn tôm thịt (3 cuốn)",
+    "category": "MEAL",
+    "nutrition": { "calories": 350, "protein_g": 18.0, "fat_g": 8.0, "carbs_g": 50.0 }
+  },
+  {
+    "name": "Bánh mì chả lụa",
+    "category": "MEAL",
+    "nutrition": { "calories": 380, "protein_g": 15.0, "fat_g": 12.0, "carbs_g": 55.0 }
+  },
+  {
+    "name": "Bún riêu cua",
+    "category": "MEAL",
+    "nutrition": { "calories": 420, "protein_g": 20.0, "fat_g": 14.0, "carbs_g": 55.0 }
+  },
+  {
+    "name": "Phở bò chín",
+    "category": "MEAL",
+    "nutrition": { "calories": 450, "protein_g": 25.0, "fat_g": 12.0, "carbs_g": 60.0 }
+  },
+  {
+    "name": "Bò bít tết và khoai tây nghiền",
+    "category": "MEAL",
+    "nutrition": { "calories": 480, "protein_g": 30.0, "fat_g": 25.0, "carbs_g": 35.0 }
+  },
+  {
+    "name": "Cơm gạo lứt cá hồi nướng",
+    "category": "MEAL",
+    "nutrition": { "calories": 520, "protein_g": 30.0, "fat_g": 20.0, "carbs_g": 45.0 }
+  },
+  {
+    "name": "Cơm gà xào sả ớt",
+    "category": "MEAL",
+    "nutrition": { "calories": 550, "protein_g": 30.0, "fat_g": 18.0, "carbs_g": 60.0 }
+  },
+  {
+    "name": "Bún bò Huế",
+    "category": "MEAL",
+    "nutrition": { "calories": 600, "protein_g": 28.0, "fat_g": 22.0, "carbs_g": 65.0 }
+  },
+  {
+    "name": "Mì Ý sốt bò băm",
+    "category": "MEAL",
+    "nutrition": { "calories": 620, "protein_g": 25.0, "fat_g": 20.0, "carbs_g": 85.0 }
+  },
+  {
+    "name": "Mì xào hải sản",
+    "category": "MEAL",
+    "nutrition": { "calories": 650, "protein_g": 22.0, "fat_g": 18.0, "carbs_g": 90.0 }
+  },
+  {
+    "name": "Cơm rang dưa bò",
+    "category": "MEAL",
+    "nutrition": { "calories": 700, "protein_g": 25.0, "fat_g": 28.0, "carbs_g": 80.0 }
+  },
+  {
+    "name": "Cơm tấm sườn bì chả",
+    "category": "MEAL",
+    "nutrition": { "calories": 750, "protein_g": 35.0, "fat_g": 30.0, "carbs_g": 85.0 }
+  }
+]
