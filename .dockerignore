@@ -1,0 +1,15 @@
+.git
+.gitignore
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.ipynb
+venv.rar
+code.ipynb
+train_optimized.py
+update_notebook.py
+description.jpg
+wearables_monitoring_data.csv
