@@ -34,3 +34,47 @@ def generate_article(title: str, category: str) -> str:
 
     except Exception as e:
         return f"Lỗi Gemini: {str(e)}"
+
+def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
+    prompt = """
+    Bạn là một bác sĩ hỗ trợ phân tích hồ sơ khám bệnh/đơn thuốc. Hãy đọc hình ảnh đơn thuốc/hồ sơ này và trích xuất ra:
+    1. Danh sách các loại thuốc cần uống (tên thuốc, liều dùng, số ngày, lưu ý).
+    2. Danh sách các nhóm thức ăn, món ăn mà bác sĩ yêu cầu kiêng cữ (nếu có, tự suy luận dựa trên bệnh án nếu cần thiết, ví dụ: bệnh đau dạ dày thì kiêng chua cay).
+    
+    Hãy trả về ĐÚNG định dạng JSON sau, không kèm theo bất kì chữ nào khác ngoài JSON:
+    {
+      "medications": [
+        { "name": "Tên thuốc", "dosage": "Liều dùng", "duration": "Thời gian (ví dụ: 5 ngày)", "note": "Lưu ý" }
+      ],
+      "forbidden_foods": ["Món 1", "Món 2"],
+      "diagnosis": "Chẩn đoán bệnh"
+    }
+    """
+    try:
+        parts = [
+            {"mime_type": mime_type, "data": image_bytes},
+            prompt
+        ]
+        vision_model = genai.GenerativeModel('gemini-1.5-flash')
+        response = vision_model.generate_content(parts)
+        text_response = response.text
+        # Cleanup json markdown codeblocks if any
+        if text_response.startswith("```json"):
+            text_response = text_response.replace("```json", "", 1)
+            if text_response.endswith("```"):
+                text_response = text_response[:-3]
+        elif text_response.startswith("```"):
+            text_response = text_response.replace("```", "", 1)
+            if text_response.endswith("```"):
+                text_response = text_response[:-3]
+        return text_response.strip()
+
+    except Exception as e:
+        import json
+        # Trả về JSON lỗi nếU thấT bạI đễ client khôNg bị crash
+        return json.dumps({
+            "error": f"Lỗi Gemini Vision: {str(e)}",
+            "medications": [],
+            "forbidden_foods": [],
+            "diagnosis": "Không thể phân tích hồ sơ"
+        })
