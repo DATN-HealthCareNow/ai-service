@@ -81,9 +81,9 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
     try:
         image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
         
-        # Dùng gemini-1.5-flash với SDK mới để tiết kiệm chi phí nhưng vẫn đọc được ảnh
+        # Dùng gemini-1.5-pro vì flash dường như vẫn bị giới hạn quyền truy cập đa phương thức trên project của bạn
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-1.5-pro',
             contents=[image_part, prompt],
             config=types.GenerateContentConfig(
                 temperature=0.2, # Nhiệt độ thấp để ra JSON chuẩn
