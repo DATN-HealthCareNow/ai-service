@@ -37,17 +37,40 @@ def generate_article(title: str, category: str) -> str:
 
 def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
     prompt = """
-    Bạn là một bác sĩ hỗ trợ phân tích hồ sơ khám bệnh/đơn thuốc. Hãy đọc hình ảnh đơn thuốc/hồ sơ này và trích xuất ra:
-    1. Danh sách các loại thuốc cần uống (tên thuốc, liều dùng, số ngày, lưu ý).
-    2. Danh sách các nhóm thức ăn, món ăn mà bác sĩ yêu cầu kiêng cữ (nếu có, tự suy luận dựa trên bệnh án nếu cần thiết, ví dụ: bệnh đau dạ dày thì kiêng chua cay).
+    Bạn là một bác sĩ và trợ lý y tế AI. Nhiệm vụ của bạn là đọc hình ảnh đơn thuốc/hồ sơ khám bệnh và trích xuất thông tin.
+    
+    Yêu cầu số 1 (Kiểm tra chất lượng ảnh):
+    - Đánh giá xem ảnh có quá mờ, bị cắt xén mất thông tin, hoặc hoàn toàn không phải là đơn thuốc/hồ sơ y tế hay không.
+    - Nếu ảnh KHÔNG THỂ đọc được, hãy đặt "is_readable": false và ghi rõ lý do vào "error_message" (Ví dụ: "Hình ảnh đơn thuốc quá mờ hoặc bị lóa sáng, vui lòng chụp lại rõ nét hơn."). Các trường khác có thể để trống.
+    
+    Yêu cầu số 2 (Trích xuất thông tin nếu ảnh đọc được):
+    - "diagnosis": Chẩn đoán bệnh của bác sĩ.
+    - "forbidden_foods": Dựa vào bệnh lý và lời dặn, suy luận các món ăn/nhóm thực phẩm cần kiêng cữ (ví dụ: đau dạ dày -> đồ chua cay). Trả về danh sách string.
+    - "medications": Danh sách các loại thuốc. Với mỗi loại thuốc, trích xuất:
+        + "name": Tên thuốc (kèm hàm lượng nếu có).
+        + "duration_days": Số ngày uống (kiểu số nguyên). Nếu không rõ, để null.
+        + "note": Lời dặn cụ thể (Ví dụ: "Uống sau ăn no", "Ngậm dưới lưỡi").
+        + "schedules": Danh sách CÁC KHUNG GIỜ uống thuốc trong ngày. Bạn phải TỰ ĐỘNG QUY ĐỔI các chữ như "Sáng", "Trưa", "Chiều", "Tối" thành giờ chuẩn (Format HH:mm).
+             Quy ước quy đổi: Sáng -> "08:00", Trưa -> "12:00", Chiều -> "17:00", Tối -> "20:00".
+             Mỗi khung giờ kèm theo "dosage" (liều lượng). Ví dụ: "Sáng 1 viên, Tối 1 viên" -> [ {"time": "08:00", "dosage": "1 viên"}, {"time": "20:00", "dosage": "1 viên"} ].
     
     Hãy trả về ĐÚNG định dạng JSON sau, không kèm theo bất kì chữ nào khác ngoài JSON:
     {
+      "is_readable": true,
+      "error_message": "",
+      "diagnosis": "Chẩn đoán bệnh",
       "medications": [
-        { "name": "Tên thuốc", "dosage": "Liều dùng", "duration": "Thời gian (ví dụ: 5 ngày)", "note": "Lưu ý" }
+        {
+          "name": "Tên thuốc",
+          "duration_days": 5,
+          "schedules": [
+            { "time": "08:00", "dosage": "1 viên" },
+            { "time": "20:00", "dosage": "1 viên" }
+          ],
+          "note": "Uống sau khi ăn"
+        }
       ],
-      "forbidden_foods": ["Món 1", "Món 2"],
-      "diagnosis": "Chẩn đoán bệnh"
+      "forbidden_foods": ["Món 1", "Món 2"]
     }
     """
     try:
@@ -71,10 +94,11 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
 
     except Exception as e:
         import json
-        # Trả về JSON lỗi nếU thấT bạI đễ client khôNg bị crash
+        # Trả về JSON lỗi nếu thất bại để client không bị crash
         return json.dumps({
-            "error": f"Lỗi Gemini Vision: {str(e)}",
+            "is_readable": False,
+            "error_message": f"Lỗi xử lý AI: {str(e)}",
+            "diagnosis": "",
             "medications": [],
-            "forbidden_foods": [],
-            "diagnosis": "Không thể phân tích hồ sơ"
+            "forbidden_foods": []
         })
