@@ -78,7 +78,7 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
             {"mime_type": mime_type, "data": image_bytes},
             prompt
         ]
-        vision_model = genai.GenerativeModel('gemini-1.5-flash')
+        vision_model = genai.GenerativeModel('gemini-1.5-flash-latest')
         response = vision_model.generate_content(parts)
         text_response = response.text
         # Cleanup json markdown codeblocks if any

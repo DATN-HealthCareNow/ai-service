@@ -43,4 +43,20 @@ class DatabaseService:
         result = self.collection.insert_one(article_data)
         return str(result.inserted_id)
 
+    def save_medical_record(self, record_data: dict, user_id: str = "anonymous"):
+        medical_records_col = self.db["medical_records"]
+        now = datetime.now()
+        
+        document = {
+            "userId": user_id,
+            "diagnosis": record_data.get("diagnosis", ""),
+            "medications": record_data.get("medications", []),
+            "forbiddenFoods": record_data.get("forbidden_foods", []),
+            "createdAt": now,
+            "updatedAt": now
+        }
+        
+        result = medical_records_col.insert_one(document)
+        return str(result.inserted_id)
+
 db_service = DatabaseService()
