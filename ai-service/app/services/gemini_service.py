@@ -1,5 +1,7 @@
-import google.generativeai as genai
 import os
+import json
+from google import genai
+from google.genai import types
 
 # lấy API key
 API_KEY = os.getenv("GEMINI_API_KEY")
@@ -7,11 +9,8 @@ API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise ValueError("Không tìm thấy GEMINI_API_KEY")
 
-# cấu hình API
-genai.configure(api_key=API_KEY)
-
-# tạo model
-model = genai.GenerativeModel('gemini-flash-latest')
+# khởi tạo client với SDK mới
+client = genai.Client(api_key=API_KEY)
 
 def generate_article(title: str, category: str) -> str:
     prompt = f"""
@@ -29,7 +28,13 @@ def generate_article(title: str, category: str) -> str:
     """
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.7,
+            )
+        )
         return response.text if response.text else "Không tạo được nội dung"
 
     except Exception as e:
@@ -74,12 +79,17 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
     }
     """
     try:
-        parts = [
-            {"mime_type": mime_type, "data": image_bytes},
-            prompt
-        ]
-        vision_model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        response = vision_model.generate_content(parts)
+        image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+        
+        # Dùng gemini-1.5-flash với SDK mới để tiết kiệm chi phí nhưng vẫn đọc được ảnh
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=[image_part, prompt],
+            config=types.GenerateContentConfig(
+                temperature=0.2, # Nhiệt độ thấp để ra JSON chuẩn
+            )
+        )
+        
         text_response = response.text
         # Cleanup json markdown codeblocks if any
         if text_response.startswith("```json"):
@@ -93,7 +103,6 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
         return text_response.strip()
 
     except Exception as e:
-        import json
         # Trả về JSON lỗi nếu thất bại để client không bị crash
         return json.dumps({
             "is_readable": False,
