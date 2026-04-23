@@ -41,3 +41,4 @@ urllib3==2.6.3
 uvicorn==0.43.0
 websockets==16.0
 xgboost==3.2.0
+python-multipart==0.0.9
