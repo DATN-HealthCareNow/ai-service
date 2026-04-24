@@ -3,14 +3,76 @@ import json
 from google import genai
 from google.genai import types
 
-# lấy API key
-API_KEY = os.getenv("GEMINI_API_KEY")
+# Lấy API key từ GEMINI_API_KEY, fallback GOOGLE_API_KEY và luôn strip để tránh ký tự thừa.
+RAW_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+API_KEY = RAW_API_KEY.strip() if RAW_API_KEY else ""
 
 if not API_KEY:
-    raise ValueError("Không tìm thấy GEMINI_API_KEY")
+    raise ValueError("Không tìm thấy GEMINI_API_KEY hoặc GOOGLE_API_KEY")
 
-# khởi tạo client với SDK mới
-client = genai.Client(api_key=API_KEY)
+if API_KEY == "YOUR_KEY" or len(API_KEY) < 20 or not API_KEY.startswith("AIza"):
+    raise ValueError(
+        "GEMINI_API_KEY không hợp lệ. Hãy dùng API key từ Google AI Studio (thường bắt đầu bằng 'AIza')."
+    )
+
+# Luôn dùng API v1 cho Gemini Developer API.
+API_VERSION = "v1"
+client = genai.Client(
+    api_key=API_KEY,
+    http_options={"api_version": API_VERSION},
+)
+
+ARTICLE_MODELS = [
+    os.getenv("GEMINI_ARTICLE_MODEL", "gemini-1.5-flash"),
+    "gemini-1.5-flash",
+]
+
+ANALYSIS_MODELS = [
+    os.getenv("GEMINI_ANALYSIS_MODEL", "gemini-1.5-pro"),
+    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+]
+
+print(
+    f"[Gemini] api_version={API_VERSION}, article_model={ARTICLE_MODELS[0]}, analysis_model={ANALYSIS_MODELS[0]}"
+)
+
+if os.getenv("GEMINI_LIST_MODELS_ON_STARTUP", "false").strip().lower() in {"1", "true", "yes"}:
+    try:
+        for available_model in client.models.list():
+            print(available_model.name)
+    except Exception as model_list_error:
+        print(f"Không thể lấy danh sách model Gemini: {model_list_error}")
+
+
+def _unique_models(models: list[str]) -> list[str]:
+    unique: list[str] = []
+    for model in models:
+        if model and model not in unique:
+            unique.append(model)
+    return unique
+
+
+def _generate_with_model_fallback(
+    model_candidates: list[str],
+    contents,
+    temperature: float,
+):
+    last_error = None
+    for model_name in _unique_models(model_candidates):
+        try:
+            return client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    temperature=temperature,
+                ),
+            )
+        except Exception as err:
+            last_error = err
+            continue
+
+    raise RuntimeError(f"Không có model Gemini khả dụng. Lỗi cuối: {last_error}")
 
 def generate_article(title: str, category: str) -> str:
     prompt = f"""
@@ -28,12 +90,10 @@ def generate_article(title: str, category: str) -> str:
     """
 
     try:
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
+        response = _generate_with_model_fallback(
+            model_candidates=ARTICLE_MODELS,
             contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.7,
-            )
+            temperature=0.7,
         )
         return response.text if response.text else "Không tạo được nội dung"
 
@@ -80,14 +140,11 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
     """
     try:
         image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
-        
-        # Dùng gemini-1.5-pro vì flash dường như vẫn bị giới hạn quyền truy cập đa phương thức trên project của bạn
-        response = client.models.generate_content(
-            model='gemini-1.5-pro',
+
+        response = _generate_with_model_fallback(
+            model_candidates=ANALYSIS_MODELS,
             contents=[image_part, prompt],
-            config=types.GenerateContentConfig(
-                temperature=0.2, # Nhiệt độ thấp để ra JSON chuẩn
-            )
+            temperature=0.2,
         )
         
         text_response = response.text
