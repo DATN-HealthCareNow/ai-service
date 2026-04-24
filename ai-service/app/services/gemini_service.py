@@ -99,7 +99,7 @@ def generate_article(title: str, category: str) -> str:
         return response.text if response.text else "Không tạo được nội dung"
 
     except Exception as e:
-        return f"Lỗi Gemini: {str(e)}"
+        raise Exception(f"Lỗi Gemini: {str(e)}")
 
 def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
     prompt = """
@@ -111,9 +111,9 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
     
     Yêu cầu số 2 (Trích xuất thông tin nếu ảnh đọc được):
     - "diagnosis": Chẩn đoán bệnh của bác sĩ.
-    - "forbidden_foods": Dựa vào bệnh lý và lời dặn, suy luận các món ăn/nhóm thực phẩm cần kiêng cữ (ví dụ: đau dạ dày -> đồ chua cay). Trả về danh sách string.
+    - "source": Luôn luôn trả về chuỗi "image_ocr".
     - "medications": Danh sách các loại thuốc. Với mỗi loại thuốc, trích xuất:
-        + "name": Tên thuốc (kèm hàm lượng nếu có).
+        + "name": Tên thuốc phải được chuẩn hóa gọn gàng. Cấu trúc chuẩn: Tên gốc + Hàm lượng + (Tên thương mại/biệt dược nếu có). Ví dụ: "Paracetamol 500mg (Partamol Tab)". Không được để quá dư thừa.
         + "duration_days": Số ngày uống (kiểu số nguyên). Nếu không rõ, để null.
         + "note": Lời dặn cụ thể (Ví dụ: "Uống sau ăn no", "Ngậm dưới lưỡi").
         + "schedules": Danh sách CÁC KHUNG GIỜ uống thuốc trong ngày. Bạn phải TỰ ĐỘNG QUY ĐỔI các chữ như "Sáng", "Trưa", "Chiều", "Tối" thành giờ chuẩn (Format HH:mm).
@@ -125,9 +125,10 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
       "is_readable": true,
       "error_message": "",
       "diagnosis": "Chẩn đoán bệnh",
+      "source": "image_ocr",
       "medications": [
         {
-          "name": "Tên thuốc",
+          "name": "Paracetamol 500mg (Partamol Tab)",
           "duration_days": 5,
           "schedules": [
             { "time": "08:00", "dosage": "1 viên" },
@@ -135,8 +136,7 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
           ],
           "note": "Uống sau khi ăn"
         }
-      ],
-      "forbidden_foods": ["Món 1", "Món 2"]
+      ]
     }
     """
     try:
@@ -166,6 +166,6 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
             "is_readable": False,
             "error_message": f"Lỗi xử lý AI: {str(e)}",
             "diagnosis": "",
-            "medications": [],
-            "forbidden_foods": []
+            "source": "image_ocr",
+            "medications": []
         })
