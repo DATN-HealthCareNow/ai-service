@@ -23,14 +23,15 @@ client = genai.Client(
 )
 
 ARTICLE_MODELS = [
-    os.getenv("GEMINI_ARTICLE_MODEL", "gemini-1.5-flash"),
-    "gemini-1.5-flash",
+    os.getenv("GEMINI_ARTICLE_MODEL", "gemini-2.5-flash"),
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
 ]
 
 ANALYSIS_MODELS = [
-    os.getenv("GEMINI_ANALYSIS_MODEL", "gemini-1.5-pro"),
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
+    os.getenv("GEMINI_ANALYSIS_MODEL", "gemini-2.5-pro"),
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
 ]
 
 print(
