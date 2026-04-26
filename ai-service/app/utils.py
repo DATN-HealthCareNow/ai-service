@@ -1,4 +1,4 @@
-# filepath: d:\ki8\khoaluan\AI\ai-service\app\utils.py
+# filepath: d:\Quan_Ly_Mon_Hoc\Khoa_Luan_Tot_Nghiep\HealthCareNow\ai-service\ai-service\app\utils.py
 import json
 import joblib
 import pandas as pd
@@ -11,7 +11,6 @@ rf_model = None
 xgb_model = None
 FOOD_DB: List[Dict[str, Any]] = []
 
-
 def load_food_db() -> List[Dict[str, Any]]:
     try:
         with open(FOOD_DB_PATH, "r", encoding="utf-8") as f:
@@ -20,9 +19,7 @@ def load_food_db() -> List[Dict[str, Any]]:
         print(f"Error loading food_db.json: {e}")
         return []
 
-
 FOOD_DB = load_food_db()
-
 
 def load_models():
     global rf_model, xgb_model
@@ -34,83 +31,139 @@ def load_models():
         print(f"Error loading models: {e}")
         raise
 
+# === TOÁN HỌC HÓA DINH DƯỠNG (RULE-BASED) ===
 
-def get_food_recommendations(calories: float, count: int = 5) -> List[Dict[str, Any]]:
-    if not FOOD_DB:
-        return []
+def calculate_bmr(weight: float, height: float, age: int, gender: int) -> float:
+    """Tính BMR theo công thức Mifflin-St Jeor"""
+    s = 5 if gender == 1 else -161
+    return (10 * weight) + (6.25 * height) - (5 * age) + s
 
-    # Tìm các nguyên liệu có lượng calo/100g gần với mục tiêu nhất
-    sorted_foods = sorted(
-        FOOD_DB,
-        key=lambda item: abs(item.get("nutrition_per_100g", {}).get("calories", 0) - calories)
-    )
+def get_met_value(activity: str) -> float:
+    met_map = {
+        "RUN": 8.0,
+        "WALK": 3.5,
+        "YOGA": 2.5,
+        "GYM": 5.0,
+        "CYCLING": 7.5,
+        "SLEEP": 1.0,
+        "SITTING": 1.3
+    }
+    return met_map.get(activity.upper(), 3.0)
 
-    return sorted_foods[:count]
+def calculate_activity_calories(activity: str, distance: float, weight: float, steps: int) -> float:
+    """Tính Calo vận động dựa trên MET và Physics"""
+    # Ưu tiên tính theo quãng đường chạy/đi bộ (Công thức: km * kg * 1.036)
+    if distance > 0:
+        return distance * weight * 1.036
+    
+    # Tính theo bước chân nếu không có quãng đường
+    if steps > 0:
+        dist_km = (steps * 0.7) / 1000 # 1 bước ~ 0.7m
+        return dist_km * weight * 1.036
+    
+    # Mặc định theo thời gian (giả định 30p nếu không có dữ liệu khác)
+    met = get_met_value(activity)
+    return (met * 3.5 * weight / 200) * 30 
 
+# === LOGIC LỌC VÀ CHỌN MÓN ĂN ===
 
-def choose_food_by_category(category: str, target_calories: float) -> Dict[str, Any]:
-    candidates = [item for item in FOOD_DB if item["category"] == category]
+def is_forbidden(food_item: Dict[str, Any], forbidden_foods: List[str]) -> bool:
+    """Kiểm tra nghiêm ngặt thực phẩm cấm qua tên, nhãn dị ứng và loại"""
+    food_name = food_item["name"].lower()
+    allergens = [a.lower() for a in food_item.get("allergens", [])]
+    
+    for f in forbidden_foods:
+        f_lower = f.lower()
+        # 1. Khớp tên trực tiếp hoặc chứa từ khóa cấm (e.g., "Trứng" cấm luôn "Lòng trắng trứng")
+        if f_lower in food_name:
+            return True
+        # 2. Khớp nhãn dị ứng (e.g., cấm "Trứng" lọc qua allergen "egg")
+        if f_lower == "trứng" and "egg" in allergens:
+            return True
+        if f_lower == "sữa" and ("milk" in allergens or "dairy" in allergens):
+            return True
+        if f_lower in allergens:
+            return True
+    return False
+
+def choose_food_with_quantity(category: str, target_calories: float, forbidden_foods: List[str]) -> Dict[str, Any]:
+    """Chọn món và tính toán số lượng Gram cần thiết"""
+    candidates = [
+        item for item in FOOD_DB 
+        if item["category"] == category and not is_forbidden(item, forbidden_foods)
+    ]
+    
     if not candidates:
         return {}
-    return min(candidates, key=lambda item: abs(item.get("nutrition_per_100g", {}).get("calories", 0) - target_calories))
-
-
-def build_detailed_meal_suggestions(calories: float) -> List[Dict[str, Any]]:
-    if not FOOD_DB:
-        return []
-
-    # Gợi ý mỗi nhóm một nguyên liệu chi tiết
-    protein = choose_food_by_category("PROTEIN", calories * 0.4)
-    carb = choose_food_by_category("CARB", calories * 0.4)
-    fiber = choose_food_by_category("FIBER", calories * 0.1)
-    fat = choose_food_by_category("FAT", calories * 0.1)
-
-    # Trả về danh sách các object chi tiết
-    ingredients = [item for item in [protein, carb, fiber, fat] if item]
-    return ingredients
-
-
-# Hệ số điều chỉnh để calo thực tế hơn (do dữ liệu gốc có thể tính theo interval ngắn)
-CALORIE_SCALING_FACTOR = 2.8
-
-# Danh sách các nhãn hoạt động hợp lệ trong dataset huấn luyện
-VALID_DATASET_ACTIVITIES = [
-    "Lying", "Sitting", "Self Pace walk", 
-    "Running 3 METs", "Running 5 METs", "Running 7 METs"
-]
-
-# Ánh xạ nhãn từ mobile/user sang nhãn trong dataset huấn luyện
-ACTIVITY_MAPPING = {
-    "RUN": "Running 7 METs",
-    "CYCLING": "Running 5 METs",
-    "GYM": "Running 3 METs",
-    "YOGA": "Self Pace walk"
-}
-
-
-def predict_heart_calories(steps: float, age: int, weight: float, height: float, gender: int, distance: float, activity: str) -> Dict[str, Any]:
-    # Logic xử lý nhãn hoạt động:
-    # 1. Nếu rỗng -> mặc định "Self Pace walk"
-    # 2. Nếu đã là nhãn chuẩn trong dataset -> giữ nguyên
-    # 3. Nếu là nhãn mobile (RUN, GYM...) -> ánh xạ sang nhãn chuẩn
-    # 4. Nếu không khớp gì -> mặc định "Self Pace walk"
     
-    act_upper = activity.strip().upper() if activity else ""
+    # Chọn món có mật độ dinh dưỡng phù hợp (ở đây lấy món đầu tiên hoặc ngẫu nhiên để đa dạng)
+    import random
+    food = random.choice(candidates)
     
-    # Tìm kiếm trong bảng ánh xạ trước
-    mapped_activity = ACTIVITY_MAPPING.get(act_upper)
+    # Tính toán số Gram: (Target Calo / Calo mỗi 100g) * 100
+    cal_per_100g = food["nutrition_per_100g"]["calories"]
+    quantity_g = (target_calories / cal_per_100g) * 100
     
-    if not mapped_activity:
-        # Nếu không có trong bảng ánh xạ, kiểm tra xem có phải nhãn chuẩn không (không phân biệt hoa thường)
-        for valid_act in VALID_DATASET_ACTIVITIES:
-            if valid_act.upper() == act_upper:
-                mapped_activity = valid_act
-                break
+    # Làm tròn số Gram cho đẹp
+    quantity_g = round(quantity_g / 5) * 5 
     
-    # Cuối cùng nếu vẫn không thấy thì mặc định
-    if not mapped_activity:
-        mapped_activity = "Self Pace walk"
+    # Tính tổng dinh dưỡng cho phần ăn này
+    total_metrics = {
+        "calories": round(target_calories),
+        "protein": round(food["nutrition_per_100g"]["protein_g"] * quantity_g / 100, 1),
+        "fat": round(food["nutrition_per_100g"]["fat_g"] * quantity_g / 100, 1),
+        "carb": round(food["nutrition_per_100g"]["carbs_g"] * quantity_g / 100, 1)
+    }
     
+    return {
+        "name": food["name"],
+        "quantity_g": quantity_g,
+        "unit": "gram",
+        "category": food["category"],
+        "total_metrics": total_metrics,
+        "note": f"Dựa trên mục tiêu {target_calories} kcal cho nhóm {category}"
+    }
+
+def build_meal_plan(total_calories: float, forbidden_foods: List[str]) -> List[Dict[str, Any]]:
+    """Xây dựng thực đơn 3 bữa dựa trên tổng Calo mục tiêu"""
+    meal_types = [
+        {"type": "BREAKFAST", "ratio": 0.25},
+        {"type": "LUNCH", "ratio": 0.40},
+        {"type": "DINNER", "ratio": 0.35}
+    ]
+    
+    plan = []
+    for m in meal_types:
+        meal_cal = total_calories * m["ratio"]
+        
+        # Mỗi bữa gồm Protein + Carb + Fiber/Fat
+        foods = []
+        foods.append(choose_food_with_quantity("PROTEIN", meal_cal * 0.4, forbidden_foods))
+        foods.append(choose_food_with_quantity("CARB", meal_cal * 0.4, forbidden_foods))
+        foods.append(choose_food_with_quantity("FIBER", meal_cal * 0.2, forbidden_foods))
+        
+        # Lọc bỏ các object rỗng
+        foods = [f for f in foods if f]
+        
+        plan.append({
+            "meal_type": m["type"],
+            "total_meal_calories": round(meal_cal),
+            "foods": foods
+        })
+        
+    return plan
+
+def predict_heart_calories(steps: float, age: int, weight: float, height: float, gender: int, distance: float, activity: str, forbidden_foods: List[str] = []) -> Dict[str, Any]:
+    # 1. TÍNH TOÁN CỨNG (RULE-BASED)
+    bmr = calculate_bmr(weight, height, age, gender)
+    activity_kcal = calculate_activity_calories(activity, distance, weight, int(steps))
+    
+    # TDEE = BMR * PAL (Physical Activity Level) + Activity_Kcal
+    # PAL mặc định cho người ít vận động là 1.2
+    tdee = (bmr * 1.2) + activity_kcal
+    
+    # 2. AI INSIGHT (Dự đoán nhịp tim & Calo tham khảo từ XGBoost)
+    # Giữ lại để tham khảo hoặc dùng cho UI "AI Prediction"
     BMI = weight / ((height / 100) ** 2)
     sample = pd.DataFrame([{
         "steps": steps,
@@ -118,16 +171,30 @@ def predict_heart_calories(steps: float, age: int, weight: float, height: float,
         "age": age,
         "gender": gender,
         "distance": distance,
-        "activity": mapped_activity
+        "activity": "Running 7 METs" if activity.upper() == "RUN" else "Self Pace walk"
     }])
-    pred = xgb_model.predict(sample)[0]
     
-    # Áp dụng hệ số nhân để Calo sát với thực tế vận động hàng ngày hơn
-    raw_calories = float(pred[1])
-    adjusted_calories = raw_calories * CALORIE_SCALING_FACTOR
-    
+    ai_heart_rate = 90.0 # Default
+    if xgb_model:
+        pred = xgb_model.predict(sample)[0]
+        ai_heart_rate = float(pred[0])
+
+    # 3. PHÂN BỔ MACROS (Protein 30%, Carb 40%, Fat 30%)
+    target_protein_g = (tdee * 0.30) / 4
+    target_carb_g = (tdee * 0.40) / 4
+    target_fat_g = (tdee * 0.30) / 9
+
     return {
-        "heart_rate": float(pred[0]),
-        "calories": adjusted_calories,
-        "recommended_foods": build_detailed_meal_suggestions(adjusted_calories)
+        "summary": {
+            "bmr": round(bmr),
+            "activity_calories": round(activity_kcal),
+            "total_tdee": round(tdee),
+            "macros_target": {
+                "protein_g": round(target_protein_g),
+                "carb_g": round(target_carb_g),
+                "fat_g": round(target_fat_g)
+            }
+        },
+        "heart_rate_insight": round(ai_heart_rate),
+        "meals": build_meal_plan(tdee, forbidden_foods)
     }
