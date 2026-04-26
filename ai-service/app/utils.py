@@ -48,22 +48,28 @@ def get_food_recommendations(calories: float, count: int = 5) -> List[Dict[str, 
     return sorted_foods[:count]
 
 
-def choose_food_by_category(category: str, target_calories: float) -> Dict[str, Any]:
-    candidates = [item for item in FOOD_DB if item["category"] == category]
+def choose_food_by_category(category: str, target_calories: float, forbidden_foods: List[str] = []) -> Dict[str, Any]:
+    # Chuyển danh sách cấm sang chữ thường để so sánh không phân biệt hoa thường
+    forbidden_lower = [f.lower() for f in forbidden_foods]
+    
+    candidates = [
+        item for item in FOOD_DB 
+        if item["category"] == category and item["name"].lower() not in forbidden_lower
+    ]
     if not candidates:
         return {}
     return min(candidates, key=lambda item: abs(item.get("nutrition_per_100g", {}).get("calories", 0) - target_calories))
 
 
-def build_detailed_meal_suggestions(calories: float) -> List[Dict[str, Any]]:
+def build_detailed_meal_suggestions(calories: float, forbidden_foods: List[str] = []) -> List[Dict[str, Any]]:
     if not FOOD_DB:
         return []
 
-    # Gợi ý mỗi nhóm một nguyên liệu chi tiết
-    protein = choose_food_by_category("PROTEIN", calories * 0.4)
-    carb = choose_food_by_category("CARB", calories * 0.4)
-    fiber = choose_food_by_category("FIBER", calories * 0.1)
-    fat = choose_food_by_category("FAT", calories * 0.1)
+    # Gợi ý mỗi nhóm một nguyên liệu chi tiết, loại bỏ thức ăn cấm
+    protein = choose_food_by_category("PROTEIN", calories * 0.4, forbidden_foods)
+    carb = choose_food_by_category("CARB", calories * 0.4, forbidden_foods)
+    fiber = choose_food_by_category("FIBER", calories * 0.1, forbidden_foods)
+    fat = choose_food_by_category("FAT", calories * 0.1, forbidden_foods)
 
     # Trả về danh sách các object chi tiết
     ingredients = [item for item in [protein, carb, fiber, fat] if item]
@@ -88,7 +94,7 @@ ACTIVITY_MAPPING = {
 }
 
 
-def predict_heart_calories(steps: float, age: int, weight: float, height: float, gender: int, distance: float, activity: str) -> Dict[str, Any]:
+def predict_heart_calories(steps: float, age: int, weight: float, height: float, gender: int, distance: float, activity: str, forbidden_foods: List[str] = []) -> Dict[str, Any]:
     # Logic xử lý nhãn hoạt động:
     # 1. Nếu rỗng -> mặc định "Self Pace walk"
     # 2. Nếu đã là nhãn chuẩn trong dataset -> giữ nguyên
@@ -129,5 +135,5 @@ def predict_heart_calories(steps: float, age: int, weight: float, height: float,
     return {
         "heart_rate": float(pred[0]),
         "calories": adjusted_calories,
-        "recommended_foods": build_detailed_meal_suggestions(adjusted_calories)
+        "recommended_foods": build_detailed_meal_suggestions(adjusted_calories, forbidden_foods)
     }
