@@ -11,7 +11,8 @@ from fastapi import FastAPI
 from app.api.article import router as article_router
 from app.api.predict import router as predict_router
 from app.api.analysis import router as analysis_router
-from app.utils import load_models  # 👈 Thêm import
+from app.api.health_insights import router as health_insights_router
+from app.utils import load_models
 
 origins = [
     "http://localhost:3000",
@@ -37,3 +38,4 @@ async def startup_event():
 app.include_router(article_router)
 app.include_router(predict_router, prefix="/ai", tags=["AI"])
 app.include_router(analysis_router, tags=["Analysis"])
+app.include_router(health_insights_router, tags=["Health Insights"])
