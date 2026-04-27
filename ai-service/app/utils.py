@@ -1,8 +1,7 @@
-# filepath: d:\Quan_Ly_Mon_Hoc\Khoa_Luan_Tot_Nghiep\HealthCareNow\ai-service\ai-service\app\utils.py
 import json
 import joblib
 import pandas as pd
-import os
+from typing import Dict, Any, List, Union
 from typing import Dict, Any, List
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
@@ -48,8 +47,25 @@ def get_met_value(activity: str) -> float:
         "SLEEP": 1.0,
         "SITTING": 1.3
     }
-    return met_map.get(activity.upper(), 3.0)
 
+    def normalize_activities(activity_input: Union[str, List[str], None]) -> List[str]:
+        if isinstance(activity_input, list):
+            normalized = [str(a).strip().upper() for a in activity_input if str(a).strip()]
+        elif isinstance(activity_input, str):
+            normalized = [activity_input.strip().upper()] if activity_input.strip() else []
+        else:
+            normalized = []
+
+        if not normalized:
+            return ["WALK"]
+
+        # Loại duplicate nhưng giữ thứ tự chọn ban đầu
+        return list(dict.fromkeys(normalized))
+
+    def pick_dominant_activity(activities: List[str]) -> str:
+        return max(activities, key=get_met_value)
+    return met_map.get(activity.upper(), 3.0)
+def calculate_activity_calories(activities: List[str], distance: float, weight: float, steps: int) -> float:
 def calculate_activity_calories(activity: str, distance: float, weight: float, steps: int) -> float:
     """Tính Calo vận động dựa trên MET và Physics"""
     # Ưu tiên tính theo quãng đường chạy/đi bộ (Công thức: km * kg * 1.036)
@@ -61,7 +77,8 @@ def calculate_activity_calories(activity: str, distance: float, weight: float, s
         dist_km = (steps * 0.7) / 1000 # 1 bước ~ 0.7m
         return dist_km * weight * 1.036
     
-    # Mặc định theo thời gian (giả định 30p nếu không có dữ liệu khác)
+    dominant_activity = pick_dominant_activity(activities)
+    met = get_met_value(dominant_activity)
     met = get_met_value(activity)
     return (met * 3.5 * weight / 200) * 30 
 
@@ -152,10 +169,22 @@ def build_meal_plan(total_calories: float, forbidden_foods: List[str]) -> List[D
         })
         
     return plan
+def predict_heart_calories(
+    steps: float,
+    age: int,
+    weight: float,
+    height: float,
+    gender: int,
+    distance: float,
+    activity: Union[str, List[str], None],
+    forbidden_foods: List[str] = []
+) -> Dict[str, Any]:
+    activities = normalize_activities(activity)
+    dominant_activity = pick_dominant_activity(activities)
 
 def predict_heart_calories(steps: float, age: int, weight: float, height: float, gender: int, distance: float, activity: str, forbidden_foods: List[str] = []) -> Dict[str, Any]:
     # 1. TÍNH TOÁN CỨNG (RULE-BASED)
-    bmr = calculate_bmr(weight, height, age, gender)
+    activity_kcal = calculate_activity_calories(activities, distance, weight, int(steps))
     activity_kcal = calculate_activity_calories(activity, distance, weight, int(steps))
     
     # TDEE = BMR * PAL (Physical Activity Level) + Activity_Kcal
@@ -170,7 +199,7 @@ def predict_heart_calories(steps: float, age: int, weight: float, height: float,
         "BMI": BMI,
         "age": age,
         "gender": gender,
-        "distance": distance,
+        "activity": "Running 7 METs" if dominant_activity == "RUN" else "Self Pace walk"
         "activity": "Running 7 METs" if activity.upper() == "RUN" else "Self Pace walk"
     }])
     
@@ -187,6 +216,8 @@ def predict_heart_calories(steps: float, age: int, weight: float, height: float,
     return {
         "summary": {
             "bmr": round(bmr),
+            "activities": activities,
+            "dominant_activity": dominant_activity,
             "activity_calories": round(activity_kcal),
             "total_tdee": round(tdee),
             "macros_target": {
