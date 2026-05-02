@@ -35,7 +35,7 @@ app.add_middleware(
 async def startup_event():
     load_models()
 
-app.include_router(article_router, prefix="/ai", tags=["AI"])
+app.include_router(article_router)
 app.include_router(predict_router, prefix="/ai", tags=["AI"])
 app.include_router(analysis_router, tags=["Analysis"])
 app.include_router(health_insights_router, tags=["Health Insights"])
