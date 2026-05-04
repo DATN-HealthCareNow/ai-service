@@ -35,3 +35,20 @@ async def analyze_medical_record(request: Request, file: UploadFile = File(...))
     except Exception as e:
         logger.error(f"Error processing medical record: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/v1/analysis/health-forecast")
+async def health_forecast(request: Request):
+    try:
+        user_data = await request.json()
+        from app.services.gemini_service import generate_health_forecast
+        
+        json_str = generate_health_forecast(user_data)
+        try:
+            data = json.loads(json_str)
+            return JSONResponse(content=data)
+        except json.JSONDecodeError:
+            return JSONResponse(content={"result": json_str})
+            
+    except Exception as e:
+        logger.error(f"Error generating health forecast: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
