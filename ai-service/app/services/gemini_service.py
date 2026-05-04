@@ -169,3 +169,55 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
             "source": "image_ocr",
             "medications": []
         })
+
+def generate_health_forecast(user_data: dict) -> str:
+    prompt = f"""
+    Bạn là một chuyên gia y tế và phân tích dữ liệu sức khỏe AI (AI Health Forecaster).
+    Nhiệm vụ của bạn là phân tích các chỉ số sức khỏe, thói quen sinh hoạt và hồ sơ bệnh án của người dùng để đưa ra đánh giá hiện tại và dự đoán rủi ro/cơ hội trong tương lai.
+
+    Dữ liệu người dùng:
+    {json.dumps(user_data, ensure_ascii=False, indent=2)}
+
+    Yêu cầu ĐẦU RA (phải trả về ĐÚNG định dạng JSON sau, không kèm bất kỳ văn bản nào khác):
+    {{
+        "health_score": [Điểm sức khỏe tổng quát từ 0 - 100],
+        "status": "[GOOD hoặc AT_RISK. GOOD nếu điểm >= 75, ngược lại là AT_RISK]",
+        "headline": "[Một câu tóm tắt trạng thái ngắn gọn bằng tiếng Anh, ví dụ: 'Vitality Peak Reached' hoặc 'Emerging Metabolic Strain']",
+        "insight": "[Một đoạn phân tích bằng tiếng Anh (khoảng 3-4 câu) giải thích tại sao lại có điểm số này, và cảnh báo/động viên người dùng dựa vào dữ liệu. Ví dụ: 'Based on recent biomarker trends...']",
+        "metrics": {{
+            "sleep_score": [Điểm chất lượng giấc ngủ 0-100],
+            "stress_index": "[Low, Medium, hoặc High]"
+        }},
+        "recommendations": {{
+            "workout": "[Gợi ý 1 kế hoạch tập luyện. Ví dụ: '30 mins Yoga for flexibility']",
+            "diet": "[Gợi ý một chế độ ăn. Ví dụ: 'Low-carb, high-protein diet, avoid spicy food']"
+        }}
+    }}
+    """
+    try:
+        response = _generate_with_model_fallback(
+            model_candidates=ANALYSIS_MODELS,
+            contents=prompt,
+            temperature=0.3,
+        )
+        
+        text_response = response.text
+        if text_response.startswith("```json"):
+            text_response = text_response.replace("```json", "", 1)
+            if text_response.endswith("```"):
+                text_response = text_response[:-3]
+        elif text_response.startswith("```"):
+            text_response = text_response.replace("```", "", 1)
+            if text_response.endswith("```"):
+                text_response = text_response[:-3]
+        return text_response.strip()
+
+    except Exception as e:
+        return json.dumps({{
+            "health_score": 50,
+            "status": "AT_RISK",
+            "headline": "System Error",
+            "insight": f"Unable to analyze data at the moment. Error: {{str(e)}}",
+            "metrics": {{"sleep_score": 0, "stress_index": "Unknown"}},
+            "recommendations": {{"workout": "Rest", "diet": "Stay hydrated"}}
+        }})
