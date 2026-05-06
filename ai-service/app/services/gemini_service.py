@@ -213,11 +213,11 @@ def generate_health_forecast(user_data: dict) -> str:
         return text_response.strip()
 
     except Exception as e:
-        return json.dumps({{
+        return json.dumps({
             "health_score": 50,
             "status": "AT_RISK",
             "headline": "System Error",
-            "insight": f"Unable to analyze data at the moment. Error: {{str(e)}}",
-            "metrics": {{"sleep_score": 0, "stress_index": "Unknown"}},
-            "recommendations": {{"workout": "Rest", "diet": "Stay hydrated"}}
-        }})
+            "insight": f"Unable to analyze data at the moment. Error: {str(e)}",
+            "metrics": {"sleep_score": 0, "stress_index": "Unknown"},
+            "recommendations": {"workout": "Rest", "diet": "Stay hydrated"}
+        })
