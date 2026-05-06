@@ -42,6 +42,7 @@ class ChatMessage(BaseModel):
 
 
 class HealthChatRequest(BaseModel):
+    user_id: Optional[str] = None
     user_profile: UserProfile
     analytics_context: dict[str, Any]  # The analytics block from the insight response
     conversation_history: list[ChatMessage] = Field(default_factory=list)
@@ -50,6 +51,8 @@ class HealthChatRequest(BaseModel):
 
 class HealthChatResponse(BaseModel):
     reply: str
+    risk_level: Optional[str] = None
+    insights: list[str] = Field(default_factory=list)
     suggested_questions: list[str] = Field(default_factory=list)
 
 

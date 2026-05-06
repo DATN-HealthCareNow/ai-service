@@ -102,12 +102,12 @@ async def analyze_health_insights(request: HealthInsightRequest) -> HealthInsigh
 @router.post("/ai/v1/health-chat", response_model=HealthChatResponse)
 async def health_chat(request: HealthChatRequest) -> HealthChatResponse:
     """
-    Contextual health AI chat.
-    Uses the analytics_context from a previous /health-insights call
-    to answer user questions with full data awareness.
+    RAG-enhanced contextual health AI chat.
+    1. Retrieves user's most relevant historical records from MongoDB Vector Search.
+    2. Injects them into the Gemini prompt for grounded, accurate answers.
     """
     language = request.user_profile.language or "vi"
-    logger.info(f"[health-chat] Chat request received, language={language}")
+    logger.info(f"[health-chat] Chat request received, language={language}, user_id={request.user_id}")
 
     # Build user profile dict for context
     profile_dict = {
@@ -123,7 +123,8 @@ async def health_chat(request: HealthChatRequest) -> HealthChatResponse:
         for msg in request.conversation_history
     ]
 
-    return generate_health_chat_reply(
+    return await generate_health_chat_reply(
+        user_id=request.user_id,
         user_profile=profile_dict,
         analytics_context=request.analytics_context,
         conversation_history=history,
