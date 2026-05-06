@@ -3,7 +3,6 @@ import json
 with open("code.ipynb", "r", encoding="utf-8") as f:
     notebook = json.load(f)
 
-# Tìm ô chứa mã nguồn huấn luyện mô hình
 for cell in notebook['cells']:
     if cell['cell_type'] == 'code' and any('joblib.dump' in line for line in cell['source']):
         # Cập nhật source của cell này
