@@ -5,6 +5,7 @@ Responsibilities:
   - Call Gemini API with fallback
   - Parse and validate structured JSON response
   - Handle chat conversations with full analytics context
+  - RAG: retrieve relevant vector context before answering
 """
 from __future__ import annotations
 import json
@@ -15,6 +16,7 @@ from app.models.insight_schema import (
     PredictionBlock, HealthChatResponse,
 )
 from app.services.gemini_service import _generate_with_model_fallback, ANALYSIS_MODELS, ARTICLE_MODELS
+from app.services.rag_service import search_relevant_context
 
 logger = logging.getLogger(__name__)
 
@@ -149,47 +151,101 @@ def _build_chat_prompt(
     conversation_history: list[dict],
     user_message: str,
     language: str,
+    rag_context: str = "",
 ) -> str:
     lang_instruction = (
-        "Toàn bộ câu trả lời bằng tiếng Việt."
+        "Respond ENTIRELY in Vietnamese. Use friendly, empathetic tone."
         if language == "vi"
-        else "Reply entirely in English."
+        else "Respond ENTIRELY in English. Use friendly, empathetic tone."
     )
 
     history_text = ""
-    for msg in conversation_history[-6:]:  # Keep last 3 exchanges
+    # Optimize conversation memory: keep last 5 messages
+    for msg in conversation_history[-5:]:
         role = "User" if msg["role"] == "user" else "Health Coach"
         history_text += f"{role}: {msg['content']}\n"
 
+    # Convert analytics context to a more readable JSON/text format
     ctx_str = json.dumps(analytics_context, ensure_ascii=False, indent=2)
 
-    return f"""You are a personal AI health coach. You have access to the user's weekly health analytics.
-{lang_instruction}
+    # RAG context section (only added when Vector Search found relevant data)
+    rag_section = ""
+    if rag_context:
+        rag_section = f"""
+## RETRIEVED HEALTH HISTORY (from Vector DB - highly relevant)
+This is specific historical data retrieved from Vector Search that is most relevant to the user's question.
+Prioritize this information when it directly answers the user's question.
+{rag_context}
+"""
 
---- USER HEALTH ANALYTICS CONTEXT ---
+    return f"""You are an AI Health Coach integrated in a healthcare application.
+
+## ROLE
+* Act as a supportive, knowledgeable, and responsible health assistant.
+* Use ONLY the provided user health data to answer.
+* DO NOT hallucinate or invent medical facts.
+* LANGUAGE REQUIREMENT: {lang_instruction}
+
+## CONTEXT
+
+User Health Data (Recent Analytics):
 {ctx_str}
-
---- CONVERSATION HISTORY ---
+{rag_section}
+Conversation History:
 {history_text if history_text else "(new conversation)"}
 
---- USER MESSAGE ---
-User: {user_message}
+User Question:
+{user_message}
 
---- INSTRUCTIONS ---
-1. Answer based STRICTLY on the user's analytics context above.
-2. Be conversational, empathetic, and encouraging.
-3. If asked about something not in the data (e.g., specific medical diagnosis), 
-   politely clarify you can only discuss the measured metrics.
-4. Keep replies concise (2-4 sentences unless a detailed explanation is needed).
-5. After your reply, suggest 2-3 follow-up questions the user might ask.
+---
+## INSTRUCTIONS
 
-Return a JSON object:
+### 1. PERSONALIZATION
+* Always base your answer on the user's real data.
+* Mention specific metrics when relevant (heart rate, sleep, activity, etc.)
+
+### 2. RESPONSE STYLE
+* Friendly, empathetic, and motivating
+* Clear and concise
+* Avoid overly technical language
+
+### 3. SAFETY RULES
+* DO NOT provide medical diagnosis
+* DO NOT prescribe medication
+* If the question is outside available data:
+  → Politely say you don't have enough data
+* If risk is detected:
+  → Suggest consulting a real doctor
+
+### 4. OUTPUT FORMAT (STRICT JSON)
+Return ONLY valid JSON with exactly these keys:
+
 {{
-  "reply": "your response here",
-  "suggested_questions": ["question 1", "question 2", "question 3"]
+  "reply": "string (main answer)",
+  "risk_level": "low | medium | high",
+  "insights": [
+    "short bullet insight 1",
+    "short bullet insight 2"
+  ],
+  "suggested_questions": [
+    "next question 1",
+    "next question 2"
+  ]
 }}
 
-Return ONLY the JSON, no markdown.
+---
+## RESPONSE LOGIC
+* Analyze user data based on the question
+* Detect patterns (bad sleep, high heart rate, low activity...)
+* Provide helpful suggestion
+* Keep answer grounded in context
+
+---
+## IMPORTANT
+* No markdown block around JSON. Return ONLY the raw JSON string.
+* No explanation outside JSON
+* No hallucination
+* Always respect safety rules
 """
 
 
@@ -244,6 +300,8 @@ def _parse_chat_response(raw_text: str) -> HealthChatResponse:
     data = json.loads(cleaned)
     return HealthChatResponse(
         reply=data.get("reply", ""),
+        risk_level=data.get("risk_level", "low"),
+        insights=data.get("insights", []),
         suggested_questions=data.get("suggested_questions", []),
     )
 
@@ -274,7 +332,8 @@ def generate_health_insight(
         return None
 
 
-def generate_health_chat_reply(
+async def generate_health_chat_reply(
+    user_id: Optional[str],
     user_profile: dict,
     analytics_context: dict,
     conversation_history: list[dict],
@@ -282,13 +341,36 @@ def generate_health_chat_reply(
     language: str = "vi",
 ) -> HealthChatResponse:
     """
-    Calls Gemini for a contextual chat reply.
+    RAG-enhanced chat reply pipeline:
+    1. Search MongoDB Vector DB for relevant historical records (medical, meals, etc.)
+    2. Inject retrieved context into prompt
+    3. Call Gemini Flash for a fast, context-aware answer
     Always returns a HealthChatResponse (with error fallback).
     """
+    # ── Step 1: RAG — retrieve relevant context from Vector DB ────────────────
+    rag_context = ""
+    if user_id:
+        try:
+            rag_context = await search_relevant_context(
+                user_id=user_id,
+                user_question=user_message,
+                limit=3,  # Top 3 most semantically similar records
+            )
+            if rag_context:
+                logger.info(f"[RAG] Found relevant context for user={user_id}, question='{user_message[:60]}...'")
+            else:
+                logger.info(f"[RAG] No relevant context found in Vector DB for user={user_id}")
+        except Exception as rag_err:
+            # RAG failure is non-fatal: fallback to analytics context only
+            logger.warning(f"[RAG] Vector search failed (non-fatal): {rag_err}")
+            rag_context = ""
+
+    # ── Step 2: Build prompt with RAG context injected ────────────────────────
     try:
         prompt = _build_chat_prompt(
             user_profile, analytics_context,
             conversation_history, user_message, language,
+            rag_context=rag_context,
         )
         response = _generate_with_model_fallback(
             model_candidates=ARTICLE_MODELS,  # Flash is faster for chat
@@ -305,5 +387,7 @@ def generate_health_chat_reply(
         )
         return HealthChatResponse(
             reply=error_msg,
+            risk_level="low",
+            insights=[],
             suggested_questions=[],
         )
