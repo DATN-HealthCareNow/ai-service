@@ -30,7 +30,7 @@ class DailyDataPoint(BaseModel):
 
 class HealthInsightRequest(BaseModel):
     user_profile: UserProfile
-    daily_data: list[DailyDataPoint] = Field(default_factory=list, min_length=1)
+    daily_data: list[DailyDataPoint] = Field(default_factory=list)
     window_days: int = Field(default=7, ge=1, le=30)
 
 
