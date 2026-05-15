@@ -51,9 +51,31 @@ class HealthChatRequest(BaseModel):
 
 class HealthChatResponse(BaseModel):
     reply: str
-    risk_level: Optional[str] = None
-    insights: list[str] = Field(default_factory=list)
+    intent: str
+    emotional_tone: str
+    risk_level: str
+    recommendations: list[str] = Field(default_factory=list)
+    suggested_actions: list[str] = Field(default_factory=list)
     suggested_questions: list[str] = Field(default_factory=list)
+    detected_health_topics: list[str] = Field(default_factory=list)
+    requires_doctor_consultation: bool = False
+    requires_emergency_attention: bool = False
+    confidence_score: float = 1.0
+
+
+# ── Proactive Coaching Schemas ───────────────────────────────────────────────
+
+class ProactiveCoachingRequest(BaseModel):
+    user_id: str
+    user_profile: UserProfile
+    analytics_context: dict[str, Any]
+
+class ProactiveCoachingResponse(BaseModel):
+    should_notify: bool
+    title: Optional[str] = None
+    message: Optional[str] = None
+    notification_type: Optional[str] = None # e.g. "warning", "praise", "suggestion"
+    suggested_action: Optional[str] = None
 
 
 # ── Analytics sub-schemas ────────────────────────────────────────────────────
