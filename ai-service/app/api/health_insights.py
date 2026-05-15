@@ -9,13 +9,14 @@ from fastapi import APIRouter, HTTPException
 from app.models.insight_schema import (
     HealthInsightRequest, HealthInsightResponse,
     HealthChatRequest, HealthChatResponse,
+    ProactiveCoachingRequest, ProactiveCoachingResponse,
     AnalyticsBlock,
 )
 from app.processors.data_processor import process_daily_data
 from app.processors.analytics_engine import run_analytics
 from app.processors.feature_engineer import extract_advanced_features
 from app.processors.ml_predictor import run_ml_analysis
-from app.services.insight_service import generate_health_insight, generate_health_chat_reply
+from app.services.insight_service import generate_health_insight, generate_health_chat_reply, generate_proactive_coaching
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -131,3 +132,38 @@ async def health_chat(request: HealthChatRequest) -> HealthChatResponse:
         user_message=request.message,
         language=language,
     )
+
+@router.post("/ai/v1/health-proactive", response_model=ProactiveCoachingResponse)
+async def health_proactive(request: ProactiveCoachingRequest) -> ProactiveCoachingResponse:
+    """
+    Analyzes health context to determine if a proactive notification should be sent.
+    """
+    language = request.user_profile.language or "vi"
+    logger.info(f"[health-proactive] Checking proactive notification for user_id={request.user_id}")
+
+    profile_dict = {
+        "age": request.user_profile.age,
+        "gender": "male" if request.user_profile.gender == 1 else "female",
+        "height_cm": request.user_profile.height_cm,
+        "weight_kg": request.user_profile.weight_kg,
+    }
+
+    result = await generate_proactive_coaching(
+        user_id=request.user_id,
+        user_profile=profile_dict,
+        analytics_context=request.analytics_context,
+        language=language,
+    )
+    
+    if result:
+        return ProactiveCoachingResponse(
+            should_notify=result.get("should_notify", False),
+            title=result.get("title"),
+            message=result.get("message"),
+            notification_type=result.get("notification_type"),
+            suggested_action=result.get("suggested_action")
+        )
+    
+    # Fallback if generation fails
+    return ProactiveCoachingResponse(should_notify=False)
+

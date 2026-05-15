@@ -58,16 +58,19 @@ def _generate_with_model_fallback(
     model_candidates: list[str],
     contents,
     temperature: float,
+    tools: list = None,
 ):
     last_error = None
     for model_name in _unique_models(model_candidates):
         try:
+            config = types.GenerateContentConfig(temperature=temperature)
+            if tools:
+                config.tools = tools
+                
             return client.models.generate_content(
                 model=model_name,
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    temperature=temperature,
-                ),
+                config=config,
             )
         except Exception as err:
             last_error = err

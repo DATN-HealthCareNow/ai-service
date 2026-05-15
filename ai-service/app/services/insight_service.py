@@ -16,7 +16,12 @@ from app.models.insight_schema import (
     PredictionBlock, HealthChatResponse,
 )
 from app.services.gemini_service import _generate_with_model_fallback, ANALYSIS_MODELS, ARTICLE_MODELS
-from app.services.rag_service import search_relevant_context
+from app.services.rag_service import search_relevant_context, sync_health_record_to_vector_db
+from app.core.prompts import (
+    INTENT_CLASSIFICATION_PROMPT, BASE_SYSTEM_PROMPT, INTENT_INSTRUCTIONS,
+    MEMORY_EXTRACTION_PROMPT, PROACTIVE_COACHING_PROMPT
+)
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -145,12 +150,77 @@ STRICT RULES:
 """
 
 
+async def extract_and_save_memory(user_id: str, user_message: str):
+    """
+    Background task: Analyzes user message for long-term facts/preferences and saves to Vector DB.
+    """
+    if not user_id or len(user_message) < 5:
+        return
+        
+    try:
+        prompt = f"{MEMORY_EXTRACTION_PROMPT}\n\nUser Message: {user_message}"
+        response = _generate_with_model_fallback(
+            model_candidates=ARTICLE_MODELS, # Fast model
+            contents=prompt,
+            temperature=0.0,
+        )
+        cleaned = _clean_json_text(response.text)
+        data = json.loads(cleaned)
+        facts = data.get("facts", [])
+        
+        for f in facts:
+            fact_str = f.get("fact")
+            category = f.get("category", "preference")
+            if fact_str:
+                logger.info(f"[Memory] Extracted new fact for user {user_id}: {fact_str} ({category})")
+                await sync_health_record_to_vector_db(
+                    user_id=user_id,
+                    record_type="user_preference",
+                    record_data={
+                        "fact": fact_str,
+                        "category": category,
+                        "date": "Memory Extraction"
+                    }
+                )
+    except Exception as e:
+        logger.warning(f"[Memory] Failed to extract memory: {e}")
+
+
+async def _detect_intent(user_message: str, conversation_history: list[dict]) -> str:
+    """Uses a fast model to classify the intent of the user's message."""
+    # Build a brief history context (last 3 messages)
+    history_text = ""
+    for msg in conversation_history[-3:]:
+        role = "User" if msg["role"] == "user" else "AI"
+        history_text += f"{role}: {msg['content']}\n"
+        
+    prompt = f"{INTENT_CLASSIFICATION_PROMPT}\n\nRecent History:\n{history_text}\nUser Message: {user_message}"
+    
+    try:
+        response = _generate_with_model_fallback(
+            model_candidates=ARTICLE_MODELS, # Use fast model
+            contents=prompt,
+            temperature=0.0, # Zero temperature for deterministic classification
+        )
+        cleaned = _clean_json_text(response.text)
+        data = json.loads(cleaned)
+        intent = data.get("intent", "casual_chat")
+        # Ensure it's one of the known intents
+        if intent not in INTENT_INSTRUCTIONS:
+            return "casual_chat"
+        return intent
+    except Exception as e:
+        logger.error(f"[insight_service] Intent detection failed: {e}")
+        return "casual_chat"
+
+
 def _build_chat_prompt(
     user_profile: dict,
     analytics_context: dict,
     conversation_history: list[dict],
     user_message: str,
     language: str,
+    intent: str,
     rag_context: str = "",
 ) -> str:
     lang_instruction = (
@@ -165,12 +235,24 @@ def _build_chat_prompt(
         role = "User" if msg["role"] == "user" else "Health Coach"
         history_text += f"{role}: {msg['content']}\n"
 
-    # Convert analytics context to a more readable JSON/text format
-    ctx_str = json.dumps(analytics_context, ensure_ascii=False, indent=2)
+    # Context inclusion depends on intent
+    ctx_str = ""
+    if intent in ["health_analysis", "risk_analysis", "medication"]:
+        # Include full analytics
+        ctx_str = json.dumps(analytics_context, ensure_ascii=False, indent=2)
+    elif intent in ["emotional_support", "motivation"]:
+        # Only include sleep, HR, and trends
+        filtered_ctx = {
+            "sleep_avg_hours": analytics_context.get("advanced", {}).get("sleep_avg_hours") if analytics_context.get("advanced") else None,
+            "resting_hr_avg": analytics_context.get("advanced", {}).get("resting_hr_avg") if analytics_context.get("advanced") else None,
+            "trends": analytics_context.get("trends", {})
+        }
+        ctx_str = json.dumps(filtered_ctx, ensure_ascii=False, indent=2)
+    # casual_chat and emergency get no/minimal context to save tokens and prevent overfitting
 
-    # RAG context section (only added when Vector Search found relevant data)
+    # RAG context section
     rag_section = ""
-    if rag_context:
+    if rag_context and intent in ["health_analysis", "risk_analysis", "medication"]:
         rag_section = f"""
 ## RETRIEVED HEALTH HISTORY (from Vector DB - highly relevant)
 This is specific historical data retrieved from Vector Search that is most relevant to the user's question.
@@ -178,18 +260,18 @@ Prioritize this information when it directly answers the user's question.
 {rag_context}
 """
 
-    return f"""You are an AI Health Coach integrated in a healthcare application.
+    system_prompt = BASE_SYSTEM_PROMPT.format(lang_instruction=lang_instruction)
+    intent_instruction = INTENT_INSTRUCTIONS.get(intent, INTENT_INSTRUCTIONS["casual_chat"])
 
-## ROLE
-* Act as a supportive, knowledgeable, and responsible health assistant.
-* Use ONLY the provided user health data to answer.
-* DO NOT hallucinate or invent medical facts.
-* LANGUAGE REQUIREMENT: {lang_instruction}
+    return f"""{system_prompt}
+
+{intent_instruction}
 
 ## CONTEXT
+User Profile: Age {user_profile.get('age')}, Gender {user_profile.get('gender')}, Height {user_profile.get('height_cm')}cm, Weight {user_profile.get('weight_kg')}kg
 
-User Health Data (Recent Analytics):
-{ctx_str}
+Recent Analytics Context:
+{ctx_str if ctx_str else "(No specific analytics needed for this intent)"}
 {rag_section}
 Conversation History:
 {history_text if history_text else "(new conversation)"}
@@ -198,54 +280,25 @@ User Question:
 {user_message}
 
 ---
-## INSTRUCTIONS
-
-### 1. PERSONALIZATION
-* Always base your answer on the user's real data.
-* Mention specific metrics when relevant (heart rate, sleep, activity, etc.)
-
-### 2. RESPONSE STYLE
-* Friendly, empathetic, and motivating
-* Clear and concise
-* Avoid overly technical language
-
-### 3. SAFETY RULES
-* DO NOT provide medical diagnosis
-* DO NOT prescribe medication
-* If the question is outside available data:
-  → Politely say you don't have enough data
-* If risk is detected:
-  → Suggest consulting a real doctor
-
-### 4. OUTPUT FORMAT (STRICT JSON)
+## OUTPUT FORMAT (STRICT JSON)
 Return ONLY valid JSON with exactly these keys:
 
 {{
   "reply": "string (main answer)",
+  "emotional_tone": "string (e.g., empathetic, encouraging, informative, urgent)",
   "risk_level": "low | medium | high",
-  "insights": [
-    "short bullet insight 1",
-    "short bullet insight 2"
-  ],
-  "suggested_questions": [
-    "next question 1",
-    "next question 2"
-  ]
+  "recommendations": ["short bullet 1", "short bullet 2"],
+  "suggested_actions": ["Log water", "Start workout", "Sleep early"],
+  "suggested_questions": ["next question 1", "next question 2"],
+  "detected_health_topics": ["sleep", "stress"],
+  "requires_doctor_consultation": boolean,
+  "requires_emergency_attention": boolean,
+  "confidence_score": float (0.0 to 1.0)
 }}
 
----
-## RESPONSE LOGIC
-* Analyze user data based on the question
-* Detect patterns (bad sleep, high heart rate, low activity...)
-* Provide helpful suggestion
-* Keep answer grounded in context
-
----
-## IMPORTANT
-* No markdown block around JSON. Return ONLY the raw JSON string.
-* No explanation outside JSON
-* No hallucination
-* Always respect safety rules
+IMPORTANT:
+- No markdown block around JSON. Return ONLY the raw JSON string.
+- No explanation outside JSON.
 """
 
 
@@ -294,15 +347,22 @@ def _parse_insight_response(raw_text: str, ml_result: dict) -> InsightBlock:
     )
 
 
-def _parse_chat_response(raw_text: str) -> HealthChatResponse:
+def _parse_chat_response(raw_text: str, intent: str) -> HealthChatResponse:
     """Parse Gemini chat response into HealthChatResponse."""
     cleaned = _clean_json_text(raw_text)
     data = json.loads(cleaned)
     return HealthChatResponse(
         reply=data.get("reply", ""),
+        intent=intent,
+        emotional_tone=data.get("emotional_tone", "neutral"),
         risk_level=data.get("risk_level", "low"),
-        insights=data.get("insights", []),
+        recommendations=data.get("recommendations", []),
+        suggested_actions=data.get("suggested_actions", []),
         suggested_questions=data.get("suggested_questions", []),
+        detected_health_topics=data.get("detected_health_topics", []),
+        requires_doctor_consultation=data.get("requires_doctor_consultation", False),
+        requires_emergency_attention=(data.get("requires_emergency_attention", False) or intent == "emergency"),
+        confidence_score=data.get("confidence_score", 1.0),
     )
 
 
@@ -332,6 +392,41 @@ def generate_health_insight(
         return None
 
 
+async def generate_proactive_coaching(
+    user_id: str,
+    user_profile: dict,
+    analytics_context: dict,
+    language: str = "vi",
+) -> Optional[dict]:
+    """
+    Analyzes daily health data to proactively generate notifications (praise, warning, suggestion).
+    Called by cron jobs.
+    """
+    lang_instruction = (
+        "Respond ENTIRELY in Vietnamese."
+        if language == "vi"
+        else "Respond ENTIRELY in English."
+    )
+    
+    ctx_str = json.dumps(analytics_context, ensure_ascii=False, indent=2)
+    prompt = f"{PROACTIVE_COACHING_PROMPT.format(lang_instruction=lang_instruction)}\n\nUser Profile:\n{json.dumps(user_profile)}\n\nRecent Analytics Context:\n{ctx_str}"
+    
+    try:
+        response = _generate_with_model_fallback(
+            model_candidates=ARTICLE_MODELS, # Fast model is sufficient
+            contents=prompt,
+            temperature=0.4,
+        )
+        cleaned = _clean_json_text(response.text)
+        data = json.loads(cleaned)
+        
+        # We return a dict that matches ProactiveCoachingResponse schema
+        return data
+    except Exception as e:
+        logger.error(f"[insight_service] Proactive coaching generation failed: {e}")
+        return None
+
+
 async def generate_health_chat_reply(
     user_id: Optional[str],
     user_profile: dict,
@@ -341,43 +436,83 @@ async def generate_health_chat_reply(
     language: str = "vi",
 ) -> HealthChatResponse:
     """
-    RAG-enhanced chat reply pipeline:
-    1. Search MongoDB Vector DB for relevant historical records (medical, meals, etc.)
-    2. Inject retrieved context into prompt
-    3. Call Gemini Flash for a fast, context-aware answer
-    Always returns a HealthChatResponse (with error fallback).
+    Multi-Intent RAG-enhanced chat reply pipeline:
+    1. Detect Intent using a fast model.
+    2. Search Vector DB ONLY if intent requires it.
+    3. Build intent-specific prompt with tailored context.
+    4. Call Gemini for structured response.
     """
-    # ── Step 1: RAG — retrieve relevant context from Vector DB ────────────────
-    rag_context = ""
+    
+    # ── Step 1: Detect Intent & Extract Memory ──────────────────────────────────
+    intent = await _detect_intent(user_message, conversation_history)
+    logger.info(f"[health-chat] Detected Intent: {intent}")
+    
     if user_id:
+        asyncio.create_task(extract_and_save_memory(user_id, user_message))
+
+    # ── Step 2: RAG (Only if intent needs it) ───────────────────────────────────
+    rag_context = ""
+    if user_id and intent in ["health_analysis", "risk_analysis", "medication"]:
         try:
             rag_context = await search_relevant_context(
                 user_id=user_id,
                 user_question=user_message,
-                limit=3,  # Top 3 most semantically similar records
+                limit=3,
             )
             if rag_context:
-                logger.info(f"[RAG] Found relevant context for user={user_id}, question='{user_message[:60]}...'")
-            else:
-                logger.info(f"[RAG] No relevant context found in Vector DB for user={user_id}")
+                logger.info(f"[RAG] Found context for user={user_id}, intent={intent}")
         except Exception as rag_err:
-            # RAG failure is non-fatal: fallback to analytics context only
             logger.warning(f"[RAG] Vector search failed (non-fatal): {rag_err}")
-            rag_context = ""
 
-    # ── Step 2: Build prompt with RAG context injected ────────────────────────
+    # ── Step 3: Build & Send Prompt ─────────────────────────────────────────────
     try:
+        from app.core.tools import AVAILABLE_TOOLS
         prompt = _build_chat_prompt(
-            user_profile, analytics_context,
-            conversation_history, user_message, language,
+            user_profile=user_profile,
+            analytics_context=analytics_context,
+            conversation_history=conversation_history,
+            user_message=user_message,
+            language=language,
+            intent=intent,
             rag_context=rag_context,
         )
         response = _generate_with_model_fallback(
             model_candidates=ARTICLE_MODELS,  # Flash is faster for chat
             contents=prompt,
             temperature=0.5,
+            tools=AVAILABLE_TOOLS,
         )
-        return _parse_chat_response(response.text)
+        
+        # ── Step 4: Multi-Agent Tool Calling Loop ───────────────────────────────
+        if getattr(response, "function_calls", None):
+            logger.info(f"[Agent] AI decided to use {len(response.function_calls)} tool(s).")
+            fn_call = response.function_calls[0]
+            fn_name = fn_call.name
+            args = dict(fn_call.args) if fn_call.args else {}
+            
+            tool_result = ""
+            for tool in AVAILABLE_TOOLS:
+                if tool.__name__ == fn_name:
+                    logger.info(f"[Agent] Executing {fn_name} with args {args}")
+                    try:
+                        tool_result = tool(**args)
+                    except Exception as e:
+                        tool_result = f"Error executing tool: {e}"
+                    break
+            
+            if not tool_result:
+                tool_result = f"Tool {fn_name} not found."
+                
+            # Re-prompt Gemini with tool results
+            new_prompt = prompt + f"\n\n## SYSTEM INFO - TOOL RESULT ({fn_name})\n{tool_result}\n\nNow, generate the final JSON response answering the user."
+            logger.info(f"[Agent] Re-prompting with tool result.")
+            response = _generate_with_model_fallback(
+                model_candidates=ARTICLE_MODELS,
+                contents=new_prompt,
+                temperature=0.5,
+            )
+
+        return _parse_chat_response(response.text, intent)
     except Exception as e:
         logger.error(f"[insight_service] Gemini chat failed: {e}")
         error_msg = (
@@ -387,7 +522,10 @@ async def generate_health_chat_reply(
         )
         return HealthChatResponse(
             reply=error_msg,
+            intent=intent,
+            emotional_tone="apologetic",
             risk_level="low",
-            insights=[],
+            recommendations=[],
+            suggested_actions=[],
             suggested_questions=[],
         )
