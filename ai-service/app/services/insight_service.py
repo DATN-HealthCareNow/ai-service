@@ -305,14 +305,23 @@ IMPORTANT:
 # ── Response Parsers ──────────────────────────────────────────────────────────
 
 def _clean_json_text(text: str) -> str:
+    if not text:
+        return "{}"
     text = text.strip()
-    if text.startswith("```json"):
-        text = text[7:]
-    elif text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-    return text.strip()
+    
+    # Extract JSON from markdown code block if present
+    import re
+    match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+        
+    # Otherwise, extract from first { to last }
+    start = text.find('{')
+    end = text.rfind('}')
+    if start != -1 and end != -1 and end >= start:
+        return text[start:end+1]
+        
+    return text
 
 
 def _parse_insight_response(raw_text: str, ml_result: dict) -> InsightBlock:
