@@ -136,11 +136,11 @@ RULES:
 3. Language: {lang_instruction}
 
 Respond ONLY with valid JSON:
-{
+{{
     "should_notify": true or false,
     "title": "Short catchy title",
     "message": "The push notification body",
     "notification_type": "praise | warning | suggestion",
     "suggested_action": "Log Water | Walk | Sleep Early"
-}
+}}
 """
