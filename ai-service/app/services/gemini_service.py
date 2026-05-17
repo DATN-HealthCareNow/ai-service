@@ -15,8 +15,8 @@ if API_KEY == "YOUR_KEY" or len(API_KEY) < 20 or not API_KEY.startswith("AIza"):
         "GEMINI_API_KEY không hợp lệ. Hãy dùng API key từ Google AI Studio (thường bắt đầu bằng 'AIza')."
     )
 
-# Luôn dùng API v1 cho Gemini Developer API.
-API_VERSION = "v1"
+# Dùng API v1beta cho Gemini Developer API để hỗ trợ tools và embeddings.
+API_VERSION = "v1beta"
 client = genai.Client(
     api_key=API_KEY,
     http_options={"api_version": API_VERSION},
