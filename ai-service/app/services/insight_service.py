@@ -475,7 +475,10 @@ async def generate_health_chat_reply(
 
     # ── Step 3: Build & Send Prompt ─────────────────────────────────────────────
     try:
-        from app.core.tools import AVAILABLE_TOOLS
+        from app.core.tools import AVAILABLE_TOOLS, set_analytics_context
+        # Inject live analytics so tools can return real user data
+        set_analytics_context(analytics_context)
+        
         prompt = _build_chat_prompt(
             user_profile=user_profile,
             analytics_context=analytics_context,
