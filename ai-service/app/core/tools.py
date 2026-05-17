@@ -54,37 +54,91 @@ def get_health_metrics(metric_type: str) -> str:
     """Gets the user's current or recent health metrics from their tracking data.
 
     Args:
-        metric_type: The type of metric to retrieve. Options: "heart_rate", "steps", "sleep", "calories", "bmi", "summary".
+        metric_type: The type of metric to retrieve. Options:
+            - "heart_rate": Today's heart rate (bpm)
+            - "heart_rate_weekly": Weekly average heart rate (bpm)
+            - "steps": Today's step count
+            - "steps_weekly": Weekly average step count
+            - "sleep": Recent sleep hours
+            - "calories": Today's calories burned
+            - "calories_weekly": Weekly average calories
+            - "bmi": Current BMI
+            - "summary": Full today's health summary
     """
     logger.info(f"[Tool] get_health_metrics called: {metric_type}, context keys: {list(_current_analytics.keys())}")
     ctx = _current_analytics
     mt = metric_type.lower()
+    weekly = ctx.get("weekly_data") or []
 
-    if mt in ("heart_rate", "nhip tim", "nhịp tim"):
+    # ── Helper: compute weekly avg from weekly_data ────────────────────────────
+    def _weekly_avg(field: str) -> float | None:
+        vals = [d.get(field) for d in weekly if d.get(field) is not None and d.get(field) > 0]
+        return round(sum(vals) / len(vals), 1) if vals else None
+
+    # ── Heart rate ─────────────────────────────────────────────────────────────
+    if mt in ("heart_rate", "nhip tim", "nhịp tim", "nhịp tim hôm nay"):
         hr = ctx.get("heart_rate") or ctx.get("avg_heart_rate") or ctx.get("resting_heart_rate")
         if hr:
-            return f"Nhịp tim gần nhất của bạn là {hr} bpm."
-        return "Không có dữ liệu nhịp tim trong hồ sơ hiện tại."
+            return f"Nhịp tim hôm nay của bạn là {hr} bpm."
+        return "Không có dữ liệu nhịp tim hôm nay."
 
-    if mt in ("steps", "bước chân", "buoc chan"):
+    if mt in ("heart_rate_weekly", "nhịp tim trung bình", "nhịp tim tuần", "heart_rate_avg"):
+        avg = _weekly_avg("heart_rate")
+        if avg:
+            return f"Nhịp tim trung bình 7 ngày qua của bạn là {avg} bpm."
+        # Fallback to today's if no weekly
+        hr = ctx.get("heart_rate")
+        if hr:
+            return f"Chỉ có dữ liệu hôm nay: nhịp tim {hr} bpm (chưa đủ 7 ngày để tính trung bình)."
+        return "Không có dữ liệu nhịp tim trong tuần này."
+
+    # ── Steps ──────────────────────────────────────────────────────────────────
+    if mt in ("steps", "bước chân", "buoc chan", "bước chân hôm nay"):
         stats = ctx.get("stats") or {}
         steps = ctx.get("steps_today") or stats.get("steps_avg_7d") or ctx.get("steps")
         if steps:
-            return f"Số bước chân hôm nay (hoặc trung bình 7 ngày) của bạn là {int(steps):,} bước."
-        return "Không có dữ liệu bước chân trong hồ sơ hiện tại."
+            label = "hôm nay" if ctx.get("steps_today") else "trung bình 7 ngày"
+            return f"Số bước chân {label} của bạn là {int(steps):,} bước."
+        return "Không có dữ liệu bước chân hôm nay."
 
+    if mt in ("steps_weekly", "bước chân trung bình", "bước chân tuần", "steps_avg"):
+        avg = _weekly_avg("steps")
+        stats = ctx.get("stats") or {}
+        if avg or stats.get("steps_avg_7d"):
+            val = avg or stats.get("steps_avg_7d")
+            return f"Số bước chân trung bình 7 ngày qua của bạn là {int(val):,} bước/ngày."
+        return "Không có đủ dữ liệu bước chân trong tuần này."
+
+    # ── Sleep ──────────────────────────────────────────────────────────────────
     if mt in ("sleep", "giấc ngủ", "giac ngu"):
-        sleep = ctx.get("sleep_hours") or ctx.get("avg_sleep") or (ctx.get("stats") or {}).get("sleep_avg")
-        if sleep:
-            return f"Thời gian ngủ trung bình gần đây của bạn là {sleep:.1f} tiếng."
+        sleep_min = ctx.get("sleep_minutes_today")
+        if sleep_min:
+            return f"Tối qua bạn ngủ {sleep_min // 60} tiếng {sleep_min % 60} phút."
+        avg_min = _weekly_avg("sleep_minutes")
+        if avg_min:
+            return f"Thời gian ngủ trung bình 7 ngày qua của bạn là {avg_min/60:.1f} tiếng."
+        sleep_h = ctx.get("sleep_hours") or (ctx.get("stats") or {}).get("sleep_avg")
+        if sleep_h:
+            return f"Thời gian ngủ trung bình gần đây là {float(sleep_h):.1f} tiếng."
         return "Không có dữ liệu giấc ngủ trong hồ sơ hiện tại."
 
-    if mt in ("calories", "calo"):
-        cal = ctx.get("calories_burned") or (ctx.get("stats") or {}).get("calories_avg")
+    # ── Calories ───────────────────────────────────────────────────────────────
+    if mt in ("calories", "calo", "calories hôm nay"):
+        cal = ctx.get("calories_today") or ctx.get("calories_burned") or (ctx.get("stats") or {}).get("calories_avg")
         if cal:
-            return f"Lượng calo tiêu thụ gần nhất của bạn là {int(cal)} kcal/ngày."
+            label = "hôm nay" if ctx.get("calories_today") else "trung bình"
+            return f"Lượng calo tiêu thụ {label} của bạn là {int(cal)} kcal."
         return "Không có dữ liệu calories trong hồ sơ hiện tại."
 
+    if mt in ("calories_weekly", "calo trung bình", "calo tuần", "calories_avg"):
+        avg = _weekly_avg("calories")
+        stats = ctx.get("stats") or {}
+        if avg or stats.get("calories_avg"):
+            val = avg or stats.get("calories_avg")
+            return f"Lượng calo tiêu thụ trung bình 7 ngày qua là {int(val)} kcal/ngày."
+        return "Không có đủ dữ liệu calories trong tuần này."
+
+    # ── BMI ────────────────────────────────────────────────────────────────────
     if mt in ("bmi",):
         bmi = ctx.get("bmi")
         cat = ctx.get("bmi_category", "")
@@ -92,22 +146,25 @@ def get_health_metrics(metric_type: str) -> str:
             return f"BMI hiện tại của bạn là {bmi:.1f} ({cat})."
         return "Không có dữ liệu BMI trong hồ sơ hiện tại."
 
+    # ── Summary ────────────────────────────────────────────────────────────────
     if mt in ("summary", "tổng quan", "all"):
         parts = []
         if ctx.get("bmi"):
             parts.append(f"BMI: {ctx['bmi']:.1f} ({ctx.get('bmi_category','')})")
-        stats = ctx.get("stats") or {}
-        if stats.get("steps_avg_7d"):
-            parts.append(f"Bước chân TB 7 ngày: {int(stats['steps_avg_7d']):,}")
-        if stats.get("calories_avg"):
-            parts.append(f"Calo TB: {int(stats['calories_avg'])} kcal")
+        steps = ctx.get("steps_today") or (ctx.get("stats") or {}).get("steps_avg_7d")
+        if steps:
+            label = "hôm nay" if ctx.get("steps_today") else "TB 7 ngày"
+            parts.append(f"Bước chân {label}: {int(steps):,}")
+        cal = ctx.get("calories_today") or (ctx.get("stats") or {}).get("calories_avg")
+        if cal:
+            parts.append(f"Calo: {int(cal)} kcal")
         if ctx.get("heart_rate"):
             parts.append(f"Nhịp tim: {ctx['heart_rate']} bpm")
         if parts:
-            return "Tóm tắt sức khỏe của bạn:\n" + "\n".join(f"• {p}" for p in parts)
+            return "Tóm tắt sức khỏe hôm nay của bạn:\n" + "\n".join(f"• {p}" for p in parts)
         return "Chưa có đủ dữ liệu để tóm tắt."
 
-    return f"Không nhận dạng được loại chỉ số '{metric_type}'. Hãy thử: heart_rate, steps, sleep, calories, bmi."
+    return f"Không nhận dạng được loại chỉ số '{metric_type}'. Hãy thử: heart_rate, heart_rate_weekly, steps, steps_weekly, sleep, calories, bmi."
 
 
 AVAILABLE_TOOLS = [search_hospital, get_health_metrics]
