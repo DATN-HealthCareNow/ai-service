@@ -22,31 +22,52 @@ def search_hospital(location: str) -> str:
     """Finds nearby hospitals, clinics, and pharmacies based on user location.
 
     Args:
-        location: The location or district to search in (e.g. "Quận 5", "Bình Thạnh", "Ho Chi Minh City").
+        location: The location or district to search in (e.g. "Quận 5", "Bình Thạnh", "Gò Vấp", "Ho Chi Minh City").
     """
     logger.info(f"[Tool] search_hospital called with location: {location}")
     loc = location.lower()
     if "quận 5" in loc or "quan 5" in loc or "district 5" in loc:
         return (
-            "Các cơ sở y tế uy tín gần Quận 5:\n"
-            "1. Bệnh viện Đại học Y Dược TP.HCM – 215 Hồng Bàng, Q5 (Hạng đặc biệt)\n"
-            "2. Bệnh viện Chợ Rẫy – 201B Nguyễn Chí Thanh, Q5 (Hạng đặc biệt)\n"
-            "3. Phòng khám Đa khoa Medic – 254 Hòa Hảo, Q10 (Gần Q5)\n"
-            "4. Bệnh viện Nhân Dân 115 – 527 Sư Vạn Hạnh, Q10 (Gần Q5)"
+            "Các cơ sở y tế uy tín gần Quận 5, TP.HCM:\n"
+            "1. Bệnh viện Đại học Y Dược TP.HCM – 215 Hồng Bàng, Q5\n"
+            "2. Bệnh viện Chợ Rẫy – 201B Nguyễn Chí Thanh, Q5\n"
+            "3. Bệnh viện Nguyễn Tri Phương – 468 Nguyễn Trãi, Q5"
         )
     if "bình thạnh" in loc or "binh thanh" in loc:
         return (
-            "Các cơ sở y tế gần Bình Thạnh:\n"
-            "1. Bệnh viện Bình Thạnh – 136 Đinh Tiên Hoàng\n"
-            "2. Bệnh viện Gia An 115 – 97 Nguyễn Cửu Vân\n"
-            "3. Phòng khám FV Hospital Satellite – Quận Bình Thạnh"
+            "Các cơ sở y tế gần Bình Thạnh, TP.HCM:\n"
+            "1. Bệnh viện Bình Thạnh – 136 Đinh Tiên Hoàng, Q.Bình Thạnh\n"
+            "2. Bệnh viện Nhân dân Gia Định – 1 Nơ Trang Long, Q.Bình Thạnh\n"
+            "3. Bệnh viện Vinmec Central Park – 208 Nguyễn Hữu Cảnh, Q.Bình Thạnh"
+        )
+    if "gò vấp" in loc or "go vap" in loc:
+        return (
+            "Các cơ sở y tế uy tín gần Gò Vấp, TP.HCM:\n"
+            "1. Bệnh viện Đa khoa Gò Vấp – 642 Lê Đức Thọ, P.15, Gò Vấp\n"
+            "2. Bệnh viện Quân y 175 – 786 Nguyễn Kiệm, P.3, Gò Vấp\n"
+            "3. Bệnh viện Hồng Đức – 32/2 Thống Nhất, P.10, Gò Vấp"
+        )
+    if "hà nội" in loc or "ha noi" in loc or "hanoi" in loc:
+        return (
+            "Các cơ sở y tế uy tín tại Hà Nội:\n"
+            "1. Bệnh viện Bạch Mai – 78 Giải Phóng, Đống Đa\n"
+            "2. Bệnh viện Hữu nghị Việt Đức – 40 Tràng Thi, Hoàn Kiếm\n"
+            "3. Bệnh viện Đại học Y Hà Nội – 1 Tôn Thất Tùng, Đống Đa"
+        )
+    if "sài gòn" in loc or "sai gon" in loc or "hcm" in loc or "hồ chí minh" in loc:
+        return (
+            "Top các bệnh viện tuyến đầu tại TP.HCM:\n"
+            "1. Bệnh viện Chợ Rẫy – Quận 5\n"
+            "2. Bệnh viện Đại học Y Dược TP.HCM – Quận 5\n"
+            "3. Bệnh viện Nhân dân 115 – Quận 10\n"
+            "4. Bệnh viện Từ Dũ (Sản/Phụ khoa) – Quận 1"
         )
     return (
-        f"Các cơ sở y tế uy tín tại {location}:\n"
-        "1. Bệnh viện Tâm Anh TP.HCM – 2B Phổ Quang, Tân Bình\n"
-        "2. Bệnh viện Vinmec Central Park – 208 Nguyễn Hữu Cảnh, Bình Thạnh\n"
-        "3. Bệnh viện FV – 6 Nguyễn Lương Bằng, Phú Mỹ Hưng\n"
-        "Gợi ý: Gọi trước để đặt lịch hẹn tránh chờ lâu nhé."
+        f"Các cơ sở y tế gợi ý tại {location}:\n"
+        "1. Bệnh viện Đa khoa khu vực gần nhất (bạn có thể tìm trực tiếp trên Google Maps)\n"
+        "2. Bệnh viện Tâm Anh\n"
+        "3. Bệnh viện Vinmec\n"
+        "Vui lòng cung cấp quận/huyện cụ thể hơn (ví dụ: Quận 5, Gò Vấp, Đống Đa) để AI tìm kiếm chính xác."
     )
 
 
