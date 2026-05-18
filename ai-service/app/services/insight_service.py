@@ -252,11 +252,11 @@ def _build_chat_prompt(
 
     # RAG context section
     rag_section = ""
-    if rag_context and intent in ["health_analysis", "risk_analysis", "medication"]:
+    if rag_context and intent != "emergency":
         rag_section = f"""
 ## RETRIEVED HEALTH HISTORY (from Vector DB - highly relevant)
 This is specific historical data retrieved from Vector Search that is most relevant to the user's question.
-Prioritize this information when it directly answers the user's question.
+Prioritize this information when it directly answers the user's question, especially regarding their preferences, allergies, or past medical records.
 {rag_context}
 """
 
@@ -459,9 +459,11 @@ async def generate_health_chat_reply(
     if user_id:
         asyncio.create_task(extract_and_save_memory(user_id, user_message))
 
-    # ── Step 2: RAG (Only if intent needs it) ───────────────────────────────────
+    # ── Step 2: RAG (Memory Retrieval) ──────────────────────────────────────────
     rag_context = ""
-    if user_id and intent in ["health_analysis", "risk_analysis", "medication"]:
+    # We search memory for ALL intents except emergency, so the AI can remember preferences 
+    # even when having a casual chat or building a meal plan (health_analysis).
+    if user_id and intent != "emergency":
         try:
             rag_context = await search_relevant_context(
                 user_id=user_id,
