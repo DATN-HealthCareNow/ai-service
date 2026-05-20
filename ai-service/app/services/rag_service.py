@@ -5,24 +5,17 @@ Pipeline:
   [Data] → generate_embedding() → store in MongoDB health_vectors
   [User Question] → generate_embedding() → $vectorSearch → context string
 """
-import os
 import logging
 import json
 from typing import Any, List, Optional
-from google import genai
 from app.core.database import get_database
+from app.services.gemini_service import client as _embed_client
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = "models/text-embedding-004"   # 768-dim, Google native
+EMBEDDING_MODEL = "text-embedding-004"   # 768-dim, Google native
 VECTOR_COLLECTION_NAME = "health_vectors"
 
-# Dedicated v1 client for embeddings — v1beta does NOT support embed_content
-_RAW_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
-_embed_client = genai.Client(
-    api_key=_RAW_KEY.strip(),
-    http_options={"api_version": "v1"},
-)
 
 
 # ── Embedding ─────────────────────────────────────────────────────────────────

@@ -49,9 +49,11 @@ class DatabaseService:
         
         document = {
             "userId": user_id,
+            "recordType": "DIAGNOSIS",
             "diagnosis": record_data.get("diagnosis", ""),
             "medications": record_data.get("medications", []),
             "forbiddenFoods": record_data.get("forbidden_foods", []),
+            "status": "ACTIVE",
             "createdAt": now,
             "updatedAt": now
         }

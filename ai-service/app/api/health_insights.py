@@ -10,7 +10,6 @@ from app.models.insight_schema import (
     HealthInsightRequest, HealthInsightResponse,
     HealthChatRequest, HealthChatResponse,
     ProactiveCoachingRequest, ProactiveCoachingResponse,
-    AnalyticsBlock,
 )
 from app.processors.data_processor import process_daily_data
 from app.processors.analytics_engine import run_analytics
@@ -42,16 +41,6 @@ async def analyze_health_insights(request: HealthInsightRequest) -> HealthInsigh
         # Step 1 — Data Processing
         processed = process_daily_data(request.daily_data)
         logger.info(f"[health-insights] Processed: mode={processed.mode}, quality={processed.data_quality}")
-
-        # Fail fast for completely empty data
-        if processed.data_quality == "POOR" and processed.days_with_steps == 0:
-            return HealthInsightResponse(
-                mode=processed.mode,
-                data_quality="POOR",
-                analytics=AnalyticsBlock(activity_level="UNKNOWN"),
-                insight=None,
-                error="Insufficient data: no step data available for analysis. Please sync your health data.",
-            )
 
         # Step 2 — Rule-Based Analytics
         analytics = run_analytics(

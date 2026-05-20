@@ -147,6 +147,7 @@ STRICT RULES:
 4. risks: 0-3 items. Leave empty array [] if no real risks exist.
 5. recommendations: 2-4 SPECIFIC, immediately actionable steps.
 6. Return ONLY the JSON object, no markdown, no extra text.
+7. prediction.notes: You MUST focus directly and exclusively on evaluating/predicting risks related to Metabolic disorders (such as obesity, diabetes, gout, weight issues) and Cardiovascular diseases (such as hypertension, resting heart rate issues). Do not make generic comments; narrow down directly to these two categories based on their BMI, active heart rate, resting heart rate, BMR, or activity level.
 """
 
 

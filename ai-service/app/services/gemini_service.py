@@ -174,26 +174,45 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
         })
 
 def generate_health_forecast(user_data: dict) -> str:
+    lang = user_data.get("language", "vi")
+    
+    if lang == "vi":
+        lang_instruction = "Viết toàn bộ phản hồi bằng tiếng Việt (bao gồm cả headline, insight, và recommendations)."
+        headline_desc = "Một câu tóm tắt ngắn gọn trạng thái sức khỏe bằng tiếng Việt (Ví dụ: 'Phát hiện dấu hiệu rối loạn chuyển hóa' hoặc 'Chỉ số tim mạch ổn định')"
+        insight_desc = "Đoạn phân tích ngắn gọn (3-4 câu) bằng tiếng Việt. Phải tập trung trực tiếp và duy nhất vào chẩn đoán/dự đoán nguy cơ thuộc 2 nhóm bệnh: Rối loạn chuyển hóa (béo phì, đái tháo đường/tiểu đường, gút, mỡ máu) và Tim mạch (huyết áp, nhịp tim). Không phân tích lan man sang chủ đề khác."
+        workout_desc = "Gợi ý 1 kế hoạch tập luyện phù hợp bằng tiếng Việt (Ví dụ: '30 phút đi bộ nhanh cải thiện tim mạch')"
+        diet_desc = "Gợi ý chế độ ăn phù hợp bằng tiếng Việt (Ví dụ: 'Hạn chế carbohydrate nhanh để ổn định đường huyết')"
+    else:
+        lang_instruction = "Write the entire response in English."
+        headline_desc = "A short headline in English summarizing the health state (e.g., 'Metabolic Strain Risk' or 'Cardiovascular Health Stable')"
+        insight_desc = "A detailed analysis in English (3-4 sentences). Must focus directly and exclusively on diagnosing/predicting risks related to two disease groups: Metabolic disorders (obesity, diabetes, gout, dyslipidemia) and Cardiovascular diseases (hypertension, resting heart rate). Do not drift into other health topics."
+        workout_desc = "A workout suggestion in English (e.g., '30 mins brisk walking for cardiovascular health')"
+        diet_desc = "A diet recommendation in English (e.g., 'Limit simple carbohydrates to stabilize blood sugar')"
+
     prompt = f"""
     Bạn là một chuyên gia y tế và phân tích dữ liệu sức khỏe AI (AI Health Forecaster).
     Nhiệm vụ của bạn là phân tích các chỉ số sức khỏe, thói quen sinh hoạt và hồ sơ bệnh án của người dùng để đưa ra đánh giá hiện tại và dự đoán rủi ro/cơ hội trong tương lai.
 
+    ĐẶC BIỆT: Bạn phải khoanh vùng phân tích chẩn đoán trực tiếp vào 2 nhóm bệnh lý chính sau, không phân tích chung chung hay lan man:
+    1. Rối loạn chuyển hóa (như thừa cân, béo phì, tiểu đường/đái tháo đường, gút, rối loạn mỡ máu).
+    2. Tim mạch (như tăng huyết áp, nhịp tim nhanh/chậm bất thường, suy tim, bệnh mạch vành).
+
     Dữ liệu người dùng:
     {json.dumps(user_data, ensure_ascii=False, indent=2)}
 
-    Yêu cầu ĐẦU RA (phải trả về ĐÚNG định dạng JSON sau, không kèm bất kỳ văn bản nào khác):
+    Yêu cầu ĐẦU RA (phải trả về ĐÚNG định dạng JSON sau, không kèm bất kỳ văn bản nào khác. {lang_instruction}):
     {{
         "health_score": [Điểm sức khỏe tổng quát từ 0 - 100],
         "status": "[GOOD hoặc AT_RISK. GOOD nếu điểm >= 75, ngược lại là AT_RISK]",
-        "headline": "[Một câu tóm tắt trạng thái ngắn gọn bằng tiếng Anh, ví dụ: 'Vitality Peak Reached' hoặc 'Emerging Metabolic Strain']",
-        "insight": "[Một đoạn phân tích bằng tiếng Anh (khoảng 3-4 câu) giải thích tại sao lại có điểm số này, và cảnh báo/động viên người dùng dựa vào dữ liệu. Ví dụ: 'Based on recent biomarker trends...']",
+        "headline": "[{headline_desc}]",
+        "insight": "[{insight_desc}]",
         "metrics": {{
             "sleep_score": [Điểm chất lượng giấc ngủ 0-100],
             "stress_index": "[Low, Medium, hoặc High]"
         }},
         "recommendations": {{
-            "workout": "[Gợi ý 1 kế hoạch tập luyện. Ví dụ: '30 mins Yoga for flexibility']",
-            "diet": "[Gợi ý một chế độ ăn. Ví dụ: 'Low-carb, high-protein diet, avoid spicy food']"
+            "workout": "[{workout_desc}]",
+            "diet": "[{diet_desc}]"
         }}
     }}
     """
