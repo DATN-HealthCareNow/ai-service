@@ -25,6 +25,77 @@ def load_food_db() -> List[Dict[str, Any]]:
 FOOD_DB = load_food_db()
 
 
+FOOD_TRANSLATION = {
+    # PROTEIN
+    "ức gà (không da)": "Chicken breast (skinless)",
+    "thăn bò": "Beef tenderloin",
+    "trứng gà (toàn phần)": "Whole chicken egg",
+    "cá hồi": "Salmon",
+    "tôm tươi": "Fresh shrimp",
+    "thịt lợn nạc thăn": "Lean pork tenderloin",
+    "đậu phụ": "Tofu",
+    "cá ngừ": "Tuna",
+    "thịt vịt (không da)": "Duck meat (skinless)",
+    "lòng trắng trứng": "Egg white",
+    # CARB
+    "khoai lang": "Sweet potato",
+    "gạo lứt (chưa nấu)": "Brown rice (uncooked)",
+    "yến mạch": "Oats",
+    "khoai tây": "Potato",
+    "bánh mì nguyên cám": "Whole wheat bread",
+    "bún tươi": "Fresh rice vermicelli",
+    "ngô ngọt (bắp)": "Sweet corn",
+    "đậu đen (khô)": "Black beans (dry)",
+    "đậu đỏ (khô)": "Red beans (dry)",
+    "hạt diêm mạch (quinoa)": "Quinoa",
+    # FAT
+    "quả bơ": "Avocado",
+    "hạt hạnh nhân": "Almond",
+    "hạt lạc (đậu phộng)": "Peanut",
+    "dầu olive": "Olive oil",
+    "hạt óc chó": "Walnut",
+    "hạt hướng dương": "Sunflower seed",
+    "hạt điều": "Cashew nut",
+    "bơ lạt": "Unsalted butter",
+    "hạt chia": "Chia seed",
+    "dầu dừa": "Coconut oil",
+    # FIBER
+    "bông cải xanh": "Broccoli",
+    "cải bó xôi (chân vịt)": "Spinach",
+    "cà rốt": "Carrot",
+    "cà chua": "Tomato",
+    "măng tây": "Asparagus",
+    "ớt chuông đỏ": "Red bell pepper",
+    "bắp cải": "Cabbage",
+    "dưa chuột": "Cucumber",
+    "cải bẹ xanh": "Mustard greens",
+    "đậu que": "Green beans",
+    "nấm rơm": "Straw mushroom",
+    "quả chuối": "Banana",
+    "quả táo": "Apple",
+    "quả cam": "Orange",
+    "quả dâu tây": "Strawberry",
+    "bí đỏ": "Pumpkin",
+    "củ cải trắng": "White radish",
+    "su su": "Chayote",
+    "mướp đắng (khổ qua)": "Bitter melon",
+    "rau muống": "Water spinach"
+}
+
+
+def translate_food_name(name: str, language: str) -> str:
+    if language == "en":
+        normalized = name.strip().lower()
+        if normalized in FOOD_TRANSLATION:
+            return FOOD_TRANSLATION[normalized]
+        for vi_name, en_name in FOOD_TRANSLATION.items():
+            if vi_name in normalized:
+                return en_name
+    return name
+
+
+
+
 def load_models():
     global rf_model, xgb_model
     try:
@@ -115,7 +186,7 @@ def is_forbidden(food_item: Dict[str, Any], forbidden_foods: List[str]) -> bool:
     return False
 
 
-def choose_food_with_quantity(category: str, target_calories: float, forbidden_foods: List[str]) -> Dict[str, Any]:
+def choose_food_with_quantity(category: str, target_calories: float, forbidden_foods: List[str], language: str = "vi") -> Dict[str, Any]:
     """Chọn món và tính toán số lượng Gram cần thiết"""
     candidates = [
         item
@@ -143,17 +214,24 @@ def choose_food_with_quantity(category: str, target_calories: float, forbidden_f
         "carb": round(food["nutrition_per_100g"]["carbs_g"] * quantity_g / 100, 1),
     }
 
+    if language == "en":
+        note_text = f"Based on the target of {round(target_calories)} kcal for the {category} group"
+    else:
+        note_text = f"Dựa trên mục tiêu {round(target_calories)} kcal cho nhóm {category}"
+
+    food_name = translate_food_name(food["name"], language)
+
     return {
-        "name": food["name"],
+        "name": food_name,
         "quantity_g": quantity_g,
         "unit": "gram",
         "category": food["category"],
         "total_metrics": total_metrics,
-        "note": f"Dựa trên mục tiêu {target_calories} kcal cho nhóm {category}",
+        "note": note_text,
     }
 
 
-def build_meal_plan(total_calories: float, forbidden_foods: List[str]) -> List[Dict[str, Any]]:
+def build_meal_plan(total_calories: float, forbidden_foods: List[str], language: str = "vi") -> List[Dict[str, Any]]:
     """Xây dựng thực đơn 3 bữa dựa trên tổng Calo mục tiêu"""
     meal_types = [
         {"type": "BREAKFAST", "ratio": 0.25},
@@ -167,9 +245,9 @@ def build_meal_plan(total_calories: float, forbidden_foods: List[str]) -> List[D
 
         # Mỗi bữa gồm Protein + Carb + Fiber/Fat
         foods = []
-        foods.append(choose_food_with_quantity("PROTEIN", meal_cal * 0.4, forbidden_foods))
-        foods.append(choose_food_with_quantity("CARB", meal_cal * 0.4, forbidden_foods))
-        foods.append(choose_food_with_quantity("FIBER", meal_cal * 0.2, forbidden_foods))
+        foods.append(choose_food_with_quantity("PROTEIN", meal_cal * 0.4, forbidden_foods, language))
+        foods.append(choose_food_with_quantity("CARB", meal_cal * 0.4, forbidden_foods, language))
+        foods.append(choose_food_with_quantity("FIBER", meal_cal * 0.2, forbidden_foods, language))
 
         # Lọc bỏ các object rỗng
         foods = [f for f in foods if f]
@@ -194,6 +272,7 @@ def predict_heart_calories(
     distance: float,
     activity: Union[str, List[str], None],
     forbidden_foods: List[str] = [],
+    language: str = "vi",
 ) -> Dict[str, Any]:
     activities = normalize_activities(activity)
     dominant_activity = pick_dominant_activity(activities)
@@ -246,5 +325,5 @@ def predict_heart_calories(
             },
         },
         "heart_rate_insight": round(ai_heart_rate),
-        "meals": build_meal_plan(tdee, forbidden_foods),
+        "meals": build_meal_plan(tdee, forbidden_foods, language),
     }
