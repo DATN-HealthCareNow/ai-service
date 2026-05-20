@@ -117,7 +117,7 @@ def analyze_medical_record_image(image_bytes: bytes, mime_type: str = "image/jpe
     - "source": Luôn luôn trả về chuỗi "image_ocr".
     - "medications": Danh sách các loại thuốc. Với mỗi loại thuốc, trích xuất:
         + "name": Tên thuốc phải được chuẩn hóa gọn gàng. Cấu trúc chuẩn: Tên gốc + Hàm lượng + (Tên thương mại/biệt dược nếu có). Ví dụ: "Paracetamol 500mg (Partamol Tab)". Không được để quá dư thừa.
-        + "duration_days": Số ngày uống (kiểu số nguyên). Nếu không rõ, để null.
+        + "duration_days": Số ngày uống (kiểu số nguyên). BẮT BUỘC tính toán dựa trên tổng số lượng chia cho số lượng dùng mỗi ngày (Ví dụ: Tổng 30 viên, ngày uống 2 viên -> duration_days = 15). Dữ liệu này dùng để tự động expire hồ sơ khám bệnh. Nếu hoàn toàn không có thông tin, để null.
         + "note": Lời dặn cụ thể (Ví dụ: "Uống sau ăn no", "Ngậm dưới lưỡi").
         + "schedules": Danh sách CÁC KHUNG GIỜ uống thuốc trong ngày. Bạn phải TỰ ĐỘNG QUY ĐỔI các chữ như "Sáng", "Trưa", "Chiều", "Tối" thành giờ chuẩn (Format HH:mm).
              Quy ước quy đổi: Sáng -> "08:00", Trưa -> "12:00", Chiều -> "17:00", Tối -> "20:00".
