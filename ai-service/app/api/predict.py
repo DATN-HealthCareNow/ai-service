@@ -16,6 +16,7 @@ class PredictionRequest(BaseModel):
     activity: Optional[str] = None
     activities: Optional[List[str]] = None
     forbidden_foods: list[str] = []
+    language: Optional[str] = "vi"
 
 @router.post("/predict")
 def predict_wearable(request: PredictionRequest):
@@ -23,7 +24,8 @@ def predict_wearable(request: PredictionRequest):
         result = predict_heart_calories(
             request.steps, request.age, request.weight, request.height,
             request.gender, request.distance, request.activities or request.activity or "WALK",
-            request.forbidden_foods
+            request.forbidden_foods,
+            request.language or "vi"
         )
         return result
     except Exception as e:
