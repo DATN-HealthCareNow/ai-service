@@ -178,16 +178,16 @@ def generate_health_forecast(user_data: dict) -> str:
     
     if lang == "vi":
         lang_instruction = "Viết toàn bộ phản hồi bằng tiếng Việt (bao gồm cả headline, insight, và recommendations)."
-        headline_desc = "Một câu tóm tắt ngắn gọn trạng thái sức khỏe bằng tiếng Việt (Ví dụ: 'Phát hiện dấu hiệu rối loạn chuyển hóa' hoặc 'Chỉ số tim mạch ổn định')"
-        insight_desc = "Đoạn phân tích ngắn gọn (3-4 câu) bằng tiếng Việt. Phải tập trung trực tiếp và duy nhất vào chẩn đoán/dự đoán nguy cơ thuộc 2 nhóm bệnh: Rối loạn chuyển hóa (béo phì, đái tháo đường/tiểu đường, gút, mỡ máu) và Tim mạch (huyết áp, nhịp tim). Không phân tích lan man sang chủ đề khác."
-        workout_desc = "Gợi ý 1 kế hoạch tập luyện phù hợp bằng tiếng Việt (Ví dụ: '30 phút đi bộ nhanh cải thiện tim mạch')"
-        diet_desc = "Gợi ý chế độ ăn phù hợp bằng tiếng Việt (Ví dụ: 'Hạn chế carbohydrate nhanh để ổn định đường huyết')"
+        headline_desc = "Một câu tóm tắt cực ngắn gọn trạng thái sức khỏe bằng tiếng Việt (Ví dụ: 'Nguy cơ rối loạn chuyển hóa nhẹ' hoặc 'Chỉ số tim mạch ổn định')"
+        insight_desc = "Phân tích cực kỳ ngắn gọn và cô đọng (tối đa 2 câu) bằng tiếng Việt. Tập trung duy nhất vào chỉ số có vấn đề thuộc nhóm Rối loạn chuyển hóa hoặc Tim mạch. Tuyệt đối không dài dòng."
+        workout_desc = "Khuyến nghị tập luyện ngắn, tối đa 1 dòng (Ví dụ: 'Đi bộ nhanh 30 phút/ngày')"
+        diet_desc = "Khuyến nghị ăn uống ngắn, tối đa 1 dòng (Ví dụ: 'Giảm đường và tinh bột nhanh')"
     else:
         lang_instruction = "Write the entire response in English."
-        headline_desc = "A short headline in English summarizing the health state (e.g., 'Metabolic Strain Risk' or 'Cardiovascular Health Stable')"
-        insight_desc = "A detailed analysis in English (3-4 sentences). Must focus directly and exclusively on diagnosing/predicting risks related to two disease groups: Metabolic disorders (obesity, diabetes, gout, dyslipidemia) and Cardiovascular diseases (hypertension, resting heart rate). Do not drift into other health topics."
-        workout_desc = "A workout suggestion in English (e.g., '30 mins brisk walking for cardiovascular health')"
-        diet_desc = "A diet recommendation in English (e.g., 'Limit simple carbohydrates to stabilize blood sugar')"
+        headline_desc = "A very short headline in English summarizing the health state (e.g., 'Metabolic Strain Risk' or 'Cardiovascular Health Stable')"
+        insight_desc = "An extremely short and condensed analysis (max 2 sentences) in English focusing directly and exclusively on the core risk in Metabolic or Cardiovascular groups."
+        workout_desc = "Short workout recommendation, max 1 line (e.g., '30-min brisk walk daily')"
+        diet_desc = "Short diet recommendation, max 1 line (e.g., 'Limit simple carbs and sugars')"
 
     prompt = f"""
     Bạn là một chuyên gia y tế và phân tích dữ liệu sức khỏe AI (AI Health Forecaster).
